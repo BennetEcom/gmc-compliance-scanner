@@ -3,13 +3,15 @@ GMC Compliance Scanner
 =======================
 Führt echte, live Checks gegen einen Shopify-Store (oder generisch jede
 Website) durch und bewertet die Wahrscheinlichkeit einer Google Merchant
-Center (GMC) Sperrung anhand von 5 Kategorien:
+Center (GMC) Sperrung anhand von 7 Kategorien:
 
 1. Trust & Domain-Metriken (SSL, Domain-Alter, Erreichbarkeit)
-2. Broken Links
+2. Broken Links (über die gesamte per Sitemap erkannte Seite, nicht nur die Startseite)
 3. Policy-Seiten (Impressum, Datenschutz, AGB, Widerruf, Versand, Kontakt)
 4. Produkt-Feed-Qualität (GTIN/Brand/Preis/Verfügbarkeit via Shopify products.json)
 5. Bild-Compliance (Auflösung, Alt-Text, erreichbar)
+6. Bewertungen & Social Proof (verifizierbare Plattform vs. nicht nachprüfbare/duplizierte Reviews)
+7. Künstliche Dringlichkeit/Verknappung ("Fake Urgency": Countdown-Apps, "nur noch X"-Behauptungen ohne echten Lagerbestand)
 
 Kein Login nötig, keine Datenspeicherung – alles läuft pro Request live.
 """
@@ -92,8 +94,54 @@ POLICY_PATTERNS = {
 MIN_TRUSTED_DOMAIN_AGE_DAYS = 90  # unter 3 Monate = klassisches Dropshipping-Rot-Flag
 MIN_IMAGE_EDGE_PX = 250
 RECOMMENDED_IMAGE_EDGE_PX = 800
-MAX_LINKS_TO_CHECK = 25
+MAX_LINKS_TO_CHECK = 60
 MAX_PRODUCTS_TO_SAMPLE = 8
+MAX_PRODUCT_PAGES_TO_FETCH = 6
+MAX_SITEMAP_ENTRIES = 300
+
+# --- Bekannte, seriöse Bewertungs-Plattformen (Script-/Domain-Signaturen) ---
+# Wird ein solcher Anbieter erkannt, gelten angezeigte Sternebewertungen als
+# über Dritte verifizierbar (Google verlangt genau das für Testimonials/Reviews).
+KNOWN_REVIEW_PLATFORMS = {
+    "judge.me": "Judge.me",
+    "loox.io": "Loox",
+    "loox.app": "Loox",
+    "stamped.io": "Stamped.io",
+    "yotpo.com": "Yotpo",
+    "okendo.io": "Okendo",
+    "trustpilot.com": "Trustpilot",
+    "reviews.io": "Reviews.io",
+    "fera.ai": "Fera",
+    "ryviu.com": "Ryviu",
+    "opinew.com": "Opinew",
+    "google.com/shopping/consumer": "Google Customer Reviews",
+    "verified-reviews.com": "Avis Vérifiés / Verified Reviews",
+}
+
+# --- Text-Muster für künstliche Dringlichkeit / Verknappung ---
+# Google Ads "Misrepresentation"-Richtlinie verbietet u.a. vorgetäuschte
+# Knappheit ("nur noch X verfügbar") und falsche Countdown-Timer.
+URGENCY_TEXT_PATTERNS = [
+    r"nur noch\s+\d+\s*(stück|st\.?|auf lager|verfügbar|übrig)",
+    r"only\s+\d+\s*(left|in stock|remaining)",
+    r"noch\s+\d+\s*(stück|auf lager)\s*verfügbar",
+    r"\d+\s*(people|personen)\s*(kaufen|schauen|viewing|bought)",
+    r"angebot endet in",
+    r"deal ends in",
+    r"nur noch heute",
+    r"fast ausverkauft",
+    r"selling fast",
+    r"selling out",
+    r"limited time (offer|only)",
+    r"\d+\s*%\s*(bereits\s*)?verkauft",
+]
+
+# --- Bekannte Shopify-Apps für künstliche Dringlichkeit/Countdowns ---
+URGENCY_APP_SIGNATURES = [
+    "hurrify", "fomo.com", "salespop", "sales-pop", "countdown-cart",
+    "ultimatesalesboost", "zoorix", "kaching-bundles", "hextom",
+    "countdown-timer-bar", "cartcountdown",
+]
 
 
 def normalize_url(raw: str) -> str:
@@ -226,9 +274,82 @@ async def check_trust_domain(client: httpx.AsyncClient, base_url: str) -> Catego
 
 
 # ---------------------------------------------------------------------------
-# 2) Broken Links
+# Seiten-Erkennung: nicht nur Startseite, sondern möglichst der ganze Shop
 # ---------------------------------------------------------------------------
-async def check_broken_links(client: httpx.AsyncClient, base_url: str, homepage_html: Optional[str]) -> CategoryResult:
+_LOC_RE = re.compile(r"<loc>\s*([^<\s]+)\s*</loc>", re.I)
+
+
+async def _fetch_sitemap_locs(client: httpx.AsyncClient, sitemap_url: str) -> list[str]:
+    resp = await fetch(client, sitemap_url)
+    if isinstance(resp, Exception) or resp.status_code >= 400:
+        return []
+    return _LOC_RE.findall(resp.text)[:MAX_SITEMAP_ENTRIES]
+
+
+async def discover_site_urls(client: httpx.AsyncClient, base_url: str, homepage_html: Optional[str]) -> dict:
+    """Sammelt möglichst alle Seiten des Shops (nicht nur die Startseite):
+    zuerst über die Shopify-Sitemap (sitemap.xml -> sitemap_pages/products/
+    collections_*.xml), sonst Fallback über Homepage-Links + products.json.
+    Gibt {"all": [...], "product_urls": [...], "total_discovered": int} zurück.
+    """
+    host = urlparse(base_url).netloc
+    all_urls: set[str] = set()
+    product_urls: set[str] = set()
+
+    index_locs = await _fetch_sitemap_locs(client, urljoin(base_url + "/", "sitemap.xml"))
+    sub_sitemaps = [
+        loc for loc in index_locs
+        if any(k in loc for k in ("sitemap_pages", "sitemap_products", "sitemap_collections"))
+    ][:8]
+
+    if sub_sitemaps:
+        results = await asyncio.gather(*(_fetch_sitemap_locs(client, sm) for sm in sub_sitemaps))
+        for sm_url, locs in zip(sub_sitemaps, results):
+            for loc in locs:
+                if urlparse(loc).netloc == host:
+                    all_urls.add(loc)
+                    if "/products/" in loc:
+                        product_urls.add(loc)
+
+    # Fallback / Ergänzung: Homepage-Links direkt einsammeln
+    if homepage_html:
+        soup = BeautifulSoup(homepage_html, "html.parser")
+        for a in soup.find_all("a", href=True):
+            href = a["href"].strip()
+            if href.startswith(("mailto:", "tel:", "javascript:", "#")):
+                continue
+            full = urljoin(base_url + "/", href)
+            if urlparse(full).netloc == host:
+                all_urls.add(full)
+                if "/products/" in full:
+                    product_urls.add(full)
+
+    # Fallback: products.json, falls Sitemap keine Produkte lieferte
+    if not product_urls:
+        resp = await fetch(client, urljoin(base_url, "/products.json?limit=" + str(MAX_PRODUCTS_TO_SAMPLE)))
+        if not isinstance(resp, Exception) and resp.status_code < 400:
+            try:
+                for p in resp.json().get("products", [])[:MAX_PRODUCTS_TO_SAMPLE]:
+                    handle = p.get("handle")
+                    if handle:
+                        url = urljoin(base_url + "/", f"products/{handle}")
+                        all_urls.add(url)
+                        product_urls.add(url)
+            except Exception:
+                pass
+
+    total_discovered = len(all_urls)
+    return {
+        "all": list(all_urls)[:MAX_LINKS_TO_CHECK],
+        "product_urls": list(product_urls)[:MAX_PRODUCT_PAGES_TO_FETCH],
+        "total_discovered": total_discovered,
+    }
+
+
+# ---------------------------------------------------------------------------
+# 2) Broken Links (über die gesamte erkannte Seite, nicht nur die Startseite)
+# ---------------------------------------------------------------------------
+async def check_broken_links(client: httpx.AsyncClient, base_url: str, homepage_html: Optional[str], site_urls: dict) -> CategoryResult:
     findings: list[Finding] = []
     score = 100
 
@@ -236,17 +357,8 @@ async def check_broken_links(client: httpx.AsyncClient, base_url: str, homepage_
         findings.append(Finding("medium", "Broken-Link-Check nicht möglich", "Startseite konnte nicht geladen werden."))
         return CategoryResult("broken_links", "Broken Links", 40, findings)
 
-    soup = BeautifulSoup(homepage_html, "html.parser")
-    host = urlparse(base_url).netloc
-    links = set()
-    for a in soup.find_all("a", href=True):
-        href = a["href"].strip()
-        if href.startswith(("mailto:", "tel:", "javascript:", "#")):
-            continue
-        full = urljoin(base_url + "/", href)
-        if urlparse(full).netloc == host:
-            links.add(full)
-    links = list(links)[:MAX_LINKS_TO_CHECK]
+    links = list(site_urls.get("all", []))
+    total_discovered = site_urls.get("total_discovered", len(links))
 
     broken = []
     async def check_one(url: str):
@@ -261,17 +373,21 @@ async def check_broken_links(client: httpx.AsyncClient, base_url: str, homepage_
     if links:
         ratio_broken = len(broken) / len(links)
         score = round(100 * (1 - ratio_broken))
+        coverage_note = (
+            f" ({len(links)} von {total_discovered} gefundenen Seiten geprüft, Rest übersprungen um den Scan schnell zu halten)"
+            if total_discovered > len(links) else ""
+        )
         if broken:
             preview = ", ".join(broken[:5])
             findings.append(Finding(
                 "high" if ratio_broken > 0.15 else "medium",
-                f"{len(broken)} von {len(links)} geprüften internen Links fehlerhaft",
+                f"{len(broken)} von {len(links)} geprüften Seiten/Links fehlerhaft{coverage_note}",
                 f"Beispiele: {preview}",
             ))
         else:
-            findings.append(Finding("info", "Keine Broken Links gefunden", f"{len(links)} interne Links geprüft, alle erreichbar."))
+            findings.append(Finding("info", "Keine Broken Links gefunden", f"{len(links)} Seiten/interne Links geprüft{coverage_note}, alle erreichbar."))
     else:
-        findings.append(Finding("low", "Keine internen Links gefunden", "Startseite enthält keine prüfbaren internen Links."))
+        findings.append(Finding("low", "Keine internen Links gefunden", "Es konnten keine prüfbaren internen Seiten gefunden werden."))
         score = 70
 
     return CategoryResult("broken_links", "Broken Links", max(0, min(100, score)), findings)
@@ -478,6 +594,148 @@ async def check_images(client: httpx.AsyncClient, base_url: str, products_sample
 
 
 # ---------------------------------------------------------------------------
+# Produktseiten laden (für Bewertungs- und Urgency-Checks brauchen wir das
+# tatsächlich gerenderte HTML, nicht nur products.json)
+# ---------------------------------------------------------------------------
+async def fetch_product_pages(client: httpx.AsyncClient, product_urls: list[str]) -> list[tuple[str, str]]:
+    pages: list[tuple[str, str]] = []
+
+    async def fetch_one(url: str):
+        resp = await fetch(client, url)
+        if not isinstance(resp, Exception) and resp.status_code < 400:
+            pages.append((url, resp.text))
+
+    await asyncio.gather(*(fetch_one(u) for u in product_urls))
+    return pages
+
+
+_REVIEW_CLAIM_RE = re.compile(
+    r"(\d(?:[.,]\d)?)\s*(?:/|von)\s*5|(\d[\d.,]{0,6})\s*(bewertungen|reviews|rezensionen)",
+    re.I,
+)
+_REVIEW_BLOCK_RE = re.compile(
+    r'(?:itemprop=["\']reviewBody["\']|class=["\'][^"\']*review[^"\']*["\'])[^>]*>([^<]{15,300})<',
+    re.I,
+)
+
+
+# ---------------------------------------------------------------------------
+# 6) Bewertungen & Social Proof
+# ---------------------------------------------------------------------------
+async def check_reviews(homepage_html: Optional[str], product_pages: list[tuple[str, str]]) -> CategoryResult:
+    findings: list[Finding] = []
+    score = 100
+
+    all_html = (homepage_html or "") + "".join(html for _, html in product_pages)
+    if not all_html.strip():
+        findings.append(Finding("low", "Bewertungen konnten nicht geprüft werden", "Keine Seiteninhalte zum Analysieren geladen."))
+        return CategoryResult("reviews", "Bewertungen & Social Proof", 60, findings)
+
+    lower_html = all_html.lower()
+    detected_platforms = sorted({name for sig, name in KNOWN_REVIEW_PLATFORMS.items() if sig in lower_html})
+    claims_reviews = bool(_REVIEW_CLAIM_RE.search(all_html))
+
+    if detected_platforms:
+        findings.append(Finding(
+            "info", "Verifizierbare Bewertungsplattform erkannt",
+            f"Erkannt: {', '.join(detected_platforms)}. Über Dritte nachprüfbare Bewertungen sind für Google unkritisch.",
+        ))
+    elif claims_reviews:
+        findings.append(Finding(
+            "high", "Sternebewertungen/Rezensionszahlen ohne erkennbare Drittanbieter-Plattform",
+            "Es werden Bewertungen bzw. Ratings angezeigt, aber kein bekannter Bewertungs-Dienst (z. B. Trustpilot, Judge.me, Loox) konnte im Code gefunden werden. Nicht verifizierbare Testimonials verstoßen gegen Googles Richtlinie zu 'Misrepresentation'.",
+        ))
+        score -= 35
+    else:
+        findings.append(Finding("info", "Keine Bewertungen auf der Seite gefunden", "Weder Rating-Claims noch eine Bewertungsplattform erkannt – kein Rot-Flag, aber auch kein Vertrauenssignal."))
+        score -= 5
+
+    # Identische Review-Texte über mehrere Produktseiten hinweg = klassisches
+    # Fake-Review-Muster (kopierte Templates statt echter Kundenstimmen).
+    texts_by_url: dict[str, set[str]] = {}
+    for url, html in product_pages:
+        texts_by_url[url] = {m.strip() for m in _REVIEW_BLOCK_RE.findall(html)}
+
+    seen: dict[str, str] = {}
+    duplicates = set()
+    for url, texts in texts_by_url.items():
+        for t in texts:
+            if t in seen and seen[t] != url:
+                duplicates.add(t)
+            seen[t] = url
+
+    if duplicates:
+        example = next(iter(duplicates))[:120]
+        findings.append(Finding(
+            "critical", f"{len(duplicates)} identische Bewertungstexte auf mehreren Produktseiten",
+            f"Beispieltext: \"{example}...\". Wortgleiche 'Kundenstimmen' auf unterschiedlichen Produkten sind ein starkes Indiz für gefälschte Bewertungen.",
+        ))
+        score -= 40
+
+    score = max(0, min(100, score))
+    return CategoryResult("reviews", "Bewertungen & Social Proof", score, findings)
+
+
+# ---------------------------------------------------------------------------
+# 7) Künstliche Dringlichkeit / Verknappung ("Fake Urgency")
+# ---------------------------------------------------------------------------
+async def check_urgency_patterns(product_pages: list[tuple[str, str]], products_sample: list[dict]) -> CategoryResult:
+    findings: list[Finding] = []
+    score = 100
+
+    if not product_pages:
+        findings.append(Finding("low", "Urgency-Check nicht möglich", "Keine Produktseiten zum Analysieren geladen."))
+        return CategoryResult("urgency", "Künstliche Dringlichkeit", 70, findings)
+
+    text_hits: set[str] = set()
+    app_hits: set[str] = set()
+    for _, html in product_pages:
+        lower = html.lower()
+        for pattern in URGENCY_TEXT_PATTERNS:
+            if re.search(pattern, lower):
+                text_hits.add(pattern)
+        for sig in URGENCY_APP_SIGNATURES:
+            if sig in lower:
+                app_hits.add(sig)
+
+    if not text_hits and not app_hits:
+        findings.append(Finding("info", "Keine künstlichen Dringlichkeits-Trigger gefunden", "Keine Fake-Countdown-/Verknappungs-Muster auf den geprüften Produktseiten entdeckt."))
+        return CategoryResult("urgency", "Künstliche Dringlichkeit", 100, findings)
+
+    if app_hits:
+        findings.append(Finding(
+            "medium", "Countdown-/Verknappungs-App erkannt",
+            f"Erkannte Skripte: {', '.join(sorted(app_hits))}. Solche Apps sind nicht automatisch verboten, aber die angezeigten Werte müssen real sein.",
+        ))
+        score -= 15
+
+    if text_hits:
+        findings.append(Finding(
+            "high", "Formulierungen mit künstlicher Dringlichkeit/Verknappung gefunden",
+            "z. B. 'nur noch X auf Lager', 'Angebot endet in...', Verkaufszähler. Google Ads' Misrepresentation-Richtlinie verbietet vorgetäuschte Knappheit/Dringlichkeit, wenn die Angaben nicht der Realität entsprechen – bitte manuell gegen den echten Lagerbestand prüfen.",
+        ))
+        score -= 30
+
+    # Grobe Plausibilitätsprüfung: wird Lagerbestand in Shopify überhaupt
+    # getrackt? Falls nicht, sind angezeigte "Nur noch X"-Zahlen zwangsläufig
+    # frei erfunden.
+    untracked = 0
+    for p in products_sample:
+        variants = p.get("variants", [])
+        if variants and all(v.get("inventory_management") in (None, "") for v in variants):
+            untracked += 1
+    if text_hits and products_sample and untracked == len(products_sample):
+        findings.append(Finding(
+            "critical", "Lagerbestand wird laut Shopify gar nicht getrackt",
+            "Für keines der geprüften Produkte ist Bestandsverfolgung aktiv – angezeigte 'Nur noch X verfügbar'-Hinweise können daher nicht auf echten Zahlen beruhen.",
+        ))
+        score -= 25
+
+    score = max(0, min(100, score))
+    return CategoryResult("urgency", "Künstliche Dringlichkeit", score, findings)
+
+
+# ---------------------------------------------------------------------------
 # Orchestrierung
 # ---------------------------------------------------------------------------
 async def run_scan(raw_url: str) -> dict:
@@ -489,8 +747,10 @@ async def run_scan(raw_url: str) -> dict:
         if not isinstance(home_resp, Exception) and home_resp.status_code < 400:
             homepage_html = home_resp.text
 
+        site_urls = await discover_site_urls(client, base_url, homepage_html)
+
         trust_task = check_trust_domain(client, base_url)
-        links_task = check_broken_links(client, base_url, homepage_html)
+        links_task = check_broken_links(client, base_url, homepage_html, site_urls)
         policy_task = check_policy_pages(client, base_url, homepage_html)
         feed_task = check_product_feed(client, base_url)
 
@@ -499,14 +759,20 @@ async def run_scan(raw_url: str) -> dict:
         )
         images_res = await check_images(client, base_url, products_sample)
 
-    categories = [trust_res, links_res, policy_res, feed_res, images_res]
+        product_pages = await fetch_product_pages(client, site_urls.get("product_urls", []))
+        reviews_res = await check_reviews(homepage_html, product_pages)
+        urgency_res = await check_urgency_patterns(product_pages, products_sample)
+
+    categories = [trust_res, links_res, policy_res, feed_res, images_res, reviews_res, urgency_res]
 
     weights = {
-        "trust": 0.20,
+        "trust": 0.15,
         "broken_links": 0.15,
-        "policy_pages": 0.30,
-        "product_feed": 0.25,
+        "policy_pages": 0.20,
+        "product_feed": 0.20,
         "images": 0.10,
+        "reviews": 0.10,
+        "urgency": 0.10,
     }
     overall = round(sum(c.score * weights[c.key] for c in categories))
 

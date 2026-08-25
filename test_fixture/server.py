@@ -21,8 +21,28 @@ HOME_HTML = """
   <a href="/policies/privacy-policy">Datenschutz</a>
   <a href="/pages/kontakt">Kontakt</a>
   <a href="/products/widget-a">Produkt A</a>
+  <a href="/products/widget-b">Produkt B</a>
   <a href="/products/does-not-exist">Kaputter Link</a>
 </footer>
+</body></html>
+"""
+
+# Absichtlich: Rating-Claim ohne erkennbare Drittanbieter-Plattform + Fake-
+# Urgency-Text + ein Review-Textblock, der wortgleich auch auf Produkt B
+# auftaucht (klassisches Fake-Review-Muster).
+PRODUCT_A_HTML = """
+<html><body>
+<h1>Produkt A Detailseite</h1>
+<div>4.9 von 5 Sternen (1200 Bewertungen)</div>
+<div class="review-text">Bestes Produkt ever, kam super schnell an!</div>
+<p>Nur noch 2 auf Lager - jetzt bestellen!</p>
+</body></html>
+"""
+
+PRODUCT_B_HTML = """
+<html><body>
+<h1>Produkt B Detailseite</h1>
+<div class="review-text">Bestes Produkt ever, kam super schnell an!</div>
 </body></html>
 """
 
@@ -88,7 +108,9 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/pages/kontakt":
             self._send(200, b"<html><body>Kontakt Inhalt</body></html>")
         elif path == "/products/widget-a":
-            self._send(200, b"<html><body>Produkt A Detailseite</body></html>")
+            self._send(200, PRODUCT_A_HTML.encode())
+        elif path == "/products/widget-b":
+            self._send(200, PRODUCT_B_HTML.encode())
         elif path == "/products.json":
             self._send(200, json.dumps(PRODUCTS_JSON).encode(), "application/json")
         elif path == "/images/big.jpg":
@@ -102,7 +124,8 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split("?")[0]
         known = {
             "/", "/pages/impressum", "/policies/privacy-policy", "/pages/kontakt",
-            "/products/widget-a", "/products.json", "/images/big.jpg", "/images/small.jpg",
+            "/products/widget-a", "/products/widget-b", "/products.json",
+            "/images/big.jpg", "/images/small.jpg",
         }
         self.send_response(200 if path in known else 404)
         self.end_headers()
