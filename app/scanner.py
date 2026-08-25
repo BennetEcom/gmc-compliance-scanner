@@ -72,7 +72,7 @@ _http_concurrency: Optional[asyncio.Semaphore] = None
 def _get_http_concurrency() -> asyncio.Semaphore:
     global _http_concurrency
     if _http_concurrency is None:
-        _http_concurrency = asyncio.Semaphore(6)
+        _http_concurrency = asyncio.Semaphore(4)
     return _http_concurrency
 
 # --- Policy-Seiten: Keywords, nach denen wir in Footer-Links & URLs suchen ---
@@ -415,32 +415,57 @@ async def check_broken_links(client: httpx.AsyncClient, base_url: str, homepage_
     links = list(site_urls.get("all", []))
     total_discovered = site_urls.get("total_discovered", len(links))
 
-    broken = []
-    async def check_one(url: str):
-        resp = await fetch(client, url, method="HEAD")
-        if isinstance(resp, Exception) or resp.status_code >= 400:
-            resp2 = await fetch(client, url, method="GET")
-            if isinstance(resp2, Exception) or resp2.status_code >= 400:
-                # Kann ein kurzzeitiges Rate-Limit/Bot-Schutz-Blip sein statt
-                # eines echten 404 – vor dem Urteil "broken" einmal mit
-                # Verzögerung erneut versuchen.
-                await asyncio.sleep(1.2)
-                resp3 = await fetch(client, url, method="GET")
-                if isinstance(resp3, Exception) or resp3.status_code >= 400:
-                    broken.append(url)
+    # Statuscodes, die auf Firewall/Bot-Schutz/Rate-Limit hindeuten statt auf
+    # eine echte tote Seite. Ein Scan, der viele Links kurz hintereinander
+    # abruft, kann genau das selbst auslösen – das darf nicht als "broken"
+    # gewertet werden.
+    BLOCK_STATUSES = {403, 429, 503}
 
-    await asyncio.gather(*(check_one(u) for u in links))
+    broken: list[tuple[str, object]] = []
+    blocked: list[tuple[str, object]] = []
+
+    async def classify(url: str):
+        async def attempt(method: str):
+            resp = await fetch(client, url, method=method)
+            if isinstance(resp, Exception):
+                return "error"
+            if resp.status_code >= 400:
+                return resp.status_code
+            return None
+
+        status = await attempt("HEAD")
+        if status is None:
+            return
+        status = await attempt("GET")
+        if status is None:
+            return
+        # Zwei Fehlversuche direkt hintereinander können ein Rate-Limit-Blip
+        # sein – mit steigendem Abstand nochmal gegenprüfen, bevor wir urteilen.
+        for delay in (2.0, 4.0):
+            await asyncio.sleep(delay)
+            status = await attempt("GET")
+            if status is None:
+                return
+
+        if status == "error" or status in BLOCK_STATUSES:
+            blocked.append((url, status))
+        else:
+            broken.append((url, status))
+
+    await asyncio.gather(*(classify(u) for u in links))
+
+    coverage_note = (
+        f" ({len(links)} von {total_discovered} gefundenen Seiten geprüft, Rest übersprungen um den Scan schnell zu halten)"
+        if total_discovered > len(links) else ""
+    )
 
     if links:
         ratio_broken = len(broken) / len(links)
         score = round(100 * (1 - ratio_broken))
-        coverage_note = (
-            f" ({len(links)} von {total_discovered} gefundenen Seiten geprüft, Rest übersprungen um den Scan schnell zu halten)"
-            if total_discovered > len(links) else ""
-        )
+
         if broken:
             shown = broken[:25]
-            preview = "\n".join(f"• {u}" for u in shown)
+            preview = "\n".join(f"• {u} ({status})" for u, status in shown)
             if len(broken) > len(shown):
                 preview += f"\n… und {len(broken) - len(shown)} weitere"
             findings.append(Finding(
@@ -448,8 +473,21 @@ async def check_broken_links(client: httpx.AsyncClient, base_url: str, homepage_
                 f"{len(broken)} von {len(links)} geprüften Seiten/Links fehlerhaft{coverage_note}",
                 preview,
             ))
-        else:
+        elif not blocked:
             findings.append(Finding("info", "Keine Broken Links gefunden", f"{len(links)} Seiten/interne Links geprüft{coverage_note}, alle erreichbar."))
+
+        if blocked:
+            shown = blocked[:15]
+            preview = "\n".join(f"• {u} ({status})" for u, status in shown)
+            if len(blocked) > len(shown):
+                preview += f"\n… und {len(blocked) - len(shown)} weitere"
+            findings.append(Finding(
+                "low", f"{len(blocked)} von {len(links)} Seiten durch Bot-/Rate-Limit-Schutz blockiert (nicht sicher prüfbar){coverage_note}",
+                f"Statuscodes wie 403/429 sprechen für eine Firewall/Bot-Schutz-Reaktion auf den Scan selbst, nicht für tote Links – wurde daher nicht als Broken Link gewertet:\n{preview}",
+            ))
+            # Nur ein kleiner Abzug: die Blockade ist ein Unsicherheitsfaktor,
+            # kein bestätigter Fehler.
+            score -= min(10, round(5 * len(blocked) / len(links)))
     else:
         findings.append(Finding("low", "Keine internen Links gefunden", "Es konnten keine prüfbaren internen Seiten gefunden werden."))
         score = 70
