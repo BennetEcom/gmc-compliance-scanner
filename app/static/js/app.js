@@ -49,7 +49,15 @@ function updateHeroPreview(result) {
 }
 
 const LOADING_STEP_MS = 1100;
+const MIN_LOADING_MS = 4200; // damit die Fortschrittsanzeige bei sehr schnellen Scans sichtbar bleibt
 let loadingTimer = null;
+
+function waitForMinDuration(startedAt) {
+  const elapsed = Date.now() - startedAt;
+  const remaining = MIN_LOADING_MS - elapsed;
+  if (remaining <= 0) return Promise.resolve();
+  return new Promise((resolve) => setTimeout(resolve, remaining));
+}
 
 function startLoadingAnimation() {
   const items = Array.from(document.querySelectorAll("#loading-steps li"));
@@ -149,6 +157,7 @@ function showReportError(msg) {
 
 async function pollScanResult(sessionId) {
   showLoading();
+  const started = Date.now();
   try {
     const resp = await fetch(`/api/scan/result?session_id=${encodeURIComponent(sessionId)}`);
     if (!resp.ok) {
@@ -156,6 +165,7 @@ async function pollScanResult(sessionId) {
       throw new Error(data.detail || "Zahlung konnte nicht verifiziert werden.");
     }
     const result = await resp.json();
+    await waitForMinDuration(started);
     renderReport(result);
   } catch (e) {
     showReportError(e.message || "Unbekannter Fehler beim Laden des Reports.");
@@ -176,6 +186,7 @@ form.addEventListener("submit", async (e) => {
   const originalBtnText = btn.textContent;
   btn.disabled = true;
   btn.textContent = "Wird geprüft...";
+  const scanStarted = Date.now();
 
   try {
     const resp = await fetch("/api/start-scan", {
@@ -197,6 +208,7 @@ form.addEventListener("submit", async (e) => {
     }
 
     if (data.mode === "direct") {
+      await waitForMinDuration(scanStarted);
       renderReport(data.result);
     }
   } catch (e) {
