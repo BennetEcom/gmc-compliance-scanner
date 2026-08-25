@@ -60,6 +60,21 @@ DEFAULT_HEADERS = {
 
 REQUEST_TIMEOUT = httpx.Timeout(10.0, connect=6.0)
 
+# Viele Shops haben Bot-/Rate-Limit-Schutz, der bei zu vielen gleichzeitigen
+# Anfragen von derselben IP legitime Seiten fälschlich blockiert. Wir
+# begrenzen deshalb, wie viele Requests gleichzeitig rausgehen, statt alle
+# Links auf einmal abzufeuern. Lazy erzeugt (statt beim Modul-Import), damit
+# das Semaphore garantiert an den tatsächlich laufenden Event-Loop gebunden
+# wird, nicht an einen zur Import-Zeit ggf. noch nicht existierenden.
+_http_concurrency: Optional[asyncio.Semaphore] = None
+
+
+def _get_http_concurrency() -> asyncio.Semaphore:
+    global _http_concurrency
+    if _http_concurrency is None:
+        _http_concurrency = asyncio.Semaphore(6)
+    return _http_concurrency
+
 # --- Policy-Seiten: Keywords, nach denen wir in Footer-Links & URLs suchen ---
 POLICY_PATTERNS = {
     "impressum": {
@@ -227,11 +242,12 @@ class CategoryResult:
 
 
 async def fetch(client: httpx.AsyncClient, url: str, method: str = "GET", **kw):
-    try:
-        resp = await client.request(method, url, timeout=REQUEST_TIMEOUT, follow_redirects=True, **kw)
-        return resp
-    except Exception as exc:  # noqa: BLE001
-        return exc
+    async with _get_http_concurrency():
+        try:
+            resp = await client.request(method, url, timeout=REQUEST_TIMEOUT, follow_redirects=True, **kw)
+            return resp
+        except Exception as exc:  # noqa: BLE001
+            return exc
 
 
 # ---------------------------------------------------------------------------
@@ -405,7 +421,13 @@ async def check_broken_links(client: httpx.AsyncClient, base_url: str, homepage_
         if isinstance(resp, Exception) or resp.status_code >= 400:
             resp2 = await fetch(client, url, method="GET")
             if isinstance(resp2, Exception) or resp2.status_code >= 400:
-                broken.append(url)
+                # Kann ein kurzzeitiges Rate-Limit/Bot-Schutz-Blip sein statt
+                # eines echten 404 – vor dem Urteil "broken" einmal mit
+                # Verzögerung erneut versuchen.
+                await asyncio.sleep(1.2)
+                resp3 = await fetch(client, url, method="GET")
+                if isinstance(resp3, Exception) or resp3.status_code >= 400:
+                    broken.append(url)
 
     await asyncio.gather(*(check_one(u) for u in links))
 

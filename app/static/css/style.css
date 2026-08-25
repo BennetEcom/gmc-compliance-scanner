@@ -356,12 +356,18 @@ h1 {
 }
 
 .report-header {
-  display: flex; justify-content: space-between; align-items: center; gap: 24px;
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px;
   background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 28px; flex-wrap: wrap; margin-bottom: 28px;
+  padding: 32px 28px; margin-bottom: 28px;
 }
-.report-header h2 { margin: 0 0 6px; font-size: 22px; }
-.report-header .url { color: var(--text-dim); font-size: 14px; word-break: break-all; }
+.report-header h2 { margin: 0; font-size: 22px; }
+.report-header .url { color: var(--text-dim); font-size: 14px; word-break: break-all; margin-bottom: 8px; }
+.report-ring { position: relative; width: 140px; height: 140px; margin: 4px 0 4px; }
+.report-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.report-ring-num {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 36px; font-weight: 800;
+}
 .overall-score { text-align: center; }
 .overall-score .num { font-size: 48px; font-weight: 800; }
 .overall-score .risk { font-size: 13px; font-weight: 600; padding: 4px 12px; border-radius: 999px; display: inline-block; margin-top: 6px; }

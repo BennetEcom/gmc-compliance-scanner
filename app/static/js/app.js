@@ -28,6 +28,10 @@ function riskClass(score) {
   return "risk-red";
 }
 
+function scoreColor(score) {
+  return score >= 80 ? "green" : score >= 50 ? "yellow" : "red";
+}
+
 const RING_CIRCUMFERENCE = 326.7;
 
 function updateHeroPreview(result) {
@@ -37,7 +41,7 @@ function updateHeroPreview(result) {
   if (!ring || !num || !list) return;
 
   const score = result.overall_score;
-  const color = score >= 80 ? "green" : score >= 50 ? "yellow" : "red";
+  const color = scoreColor(score);
   num.textContent = score;
   ring.style.strokeDashoffset = RING_CIRCUMFERENCE * (1 - score / 100);
   ring.classList.remove("green", "yellow", "red");
@@ -119,15 +123,22 @@ function renderReport(result) {
     })
     .join("");
 
+  const reportRingColor = scoreColor(result.overall_score);
+  const reportRingOffset = RING_CIRCUMFERENCE * (1 - result.overall_score / 100);
+
   reportContent.innerHTML = `
     ${notice}
     <div class="report-header">
-      <div>
-        <h2>Compliance Report</h2>
-        <div class="url">${result.url}</div>
+      <h2>Compliance Report</h2>
+      <div class="url">${result.url}</div>
+      <div class="report-ring">
+        <svg viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="52" class="ring-bg" />
+          <circle cx="60" cy="60" r="52" class="ring-fg ${reportRingColor}" style="stroke-dashoffset:${reportRingOffset}" />
+        </svg>
+        <div class="report-ring-num">${result.overall_score}</div>
       </div>
       <div class="overall-score">
-        <div class="num">${result.overall_score}</div>
         <div class="risk ${riskClass(result.overall_score)}">${result.risk_label}</div>
       </div>
     </div>
