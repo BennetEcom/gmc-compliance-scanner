@@ -47,17 +47,8 @@
             autocomplete="off"
           />
           <button type="submit" id="scan-btn">
-            Scan starten – {{ price }}&nbsp;€
+            Kostenlos scannen
           </button>
-        </div>
-        <div class="promo-row">
-          <input
-            id="promo-code"
-            type="text"
-            placeholder="Rabatt-/Promo-Code (optional)"
-            autocomplete="off"
-          />
-          <span class="promo-hint">Codes für zahlende Kund:innen werden im nächsten Schritt bei der Kasse eingegeben.</span>
         </div>
         <p id="form-error" class="form-error" hidden></p>
       </form>
@@ -162,8 +153,8 @@
         <div class="how-line"></div>
         <div class="how-step">
           <div class="how-circle">2</div>
-          <h3>Sicher bezahlen</h3>
-          <p>Einmalig {{ price }}&nbsp;€ pro Scan über Stripe. Rabattcodes kannst du direkt an der Kasse einlösen.</p>
+          <h3>Automatisch prüfen</h3>
+          <p>Der Scan läuft live und komplett kostenlos – keine Zahlung, keine Kreditkarte nötig.</p>
         </div>
         <div class="how-line"></div>
         <div class="how-step">
@@ -231,6 +222,7 @@
   <footer class="footer">
     <div class="container">
       <p>© <span id="year"></span> GMCGuard. Kein offizielles Google-Produkt, keine Haftung für Entscheidungen des Google Merchant Center.</p>
+      <p class="footer-credit">Ein Produkt von Ecom Germany</p>
     </div>
   </footer>
 

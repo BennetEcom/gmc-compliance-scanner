@@ -141,18 +141,6 @@ h1 {
 #scan-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(212,175,55,0.25); }
 #scan-btn:disabled { opacity: 0.6; cursor: wait; transform: none; }
 
-.promo-row { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
-#promo-code {
-  padding: 11px 14px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text);
-  font-size: 14px;
-  max-width: 320px;
-}
-.promo-hint { color: var(--text-dim); font-size: 12px; }
-
 .form-error {
   margin-top: 12px;
   color: #ffb4b4;
@@ -349,3 +337,4 @@ h1 {
 }
 
 .footer { border-top: 1px solid var(--border); padding: 28px 0; color: var(--text-dim); font-size: 13px; text-align: center; }
+.footer-credit { margin: 6px 0 0; opacity: 0.7; }

@@ -137,7 +137,6 @@ form.addEventListener("submit", async (e) => {
   errBox.hidden = true;
 
   const url = document.getElementById("store-url").value.trim();
-  const promo = document.getElementById("promo-code").value.trim();
 
   if (!url) {
     showError("Bitte gib die URL deines Shops ein.");
@@ -152,7 +151,7 @@ form.addEventListener("submit", async (e) => {
     const resp = await fetch("/api/start-scan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, promo_owner_code: promo || null }),
+      body: JSON.stringify({ url }),
     });
 
     if (!resp.ok) {

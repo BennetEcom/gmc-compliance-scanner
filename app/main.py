@@ -35,7 +35,6 @@ async def index(request: Request):
         "index.html",
         {
             "request": request,
-            "price": f"{SCAN_PRICE_EUR:.0f}",
             "stripe_configured": is_stripe_configured(),
             "pending_session_id": None,
         },
@@ -54,10 +53,10 @@ async def api_start_scan(payload: StartScanRequest):
         result = await run_scan(normalized)
         return {"mode": "direct", "result": result}
 
-    # 2) Kein Stripe konfiguriert (z.B. lokale Test-Umgebung) -> direkt scannen
+    # 2) Kein Stripe konfiguriert -> Scan ist aktuell kostenlos
     if not is_stripe_configured():
         result = await run_scan(normalized)
-        result["_notice"] = "Testmodus: Stripe ist nicht konfiguriert, Scan wurde ohne Bezahlung ausgeführt."
+        result["_notice"] = "Aktuell komplett kostenlos."
         return {"mode": "direct", "result": result}
 
     # 3) Normalfall: Stripe Checkout Session (10 EUR, Promo-Code-Feld aktiv)
@@ -71,7 +70,6 @@ async def scan_result_page(request: Request, session_id: str | None = None):
         "index.html",
         {
             "request": request,
-            "price": f"{SCAN_PRICE_EUR:.0f}",
             "stripe_configured": is_stripe_configured(),
             "pending_session_id": session_id,
         },
