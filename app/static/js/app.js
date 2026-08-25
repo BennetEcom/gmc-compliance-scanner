@@ -1,5 +1,12 @@
 document.getElementById("year").textContent = new Date().getFullYear();
 
+document.addEventListener("click", (e) => {
+  const box = e.target.closest(".checklist-box");
+  if (!box) return;
+  box.classList.toggle("checked");
+  box.closest(".checklist-item")?.classList.toggle("done");
+});
+
 const form = document.getElementById("scan-form");
 const btn = document.getElementById("scan-btn");
 const errBox = document.getElementById("form-error");
@@ -147,6 +154,18 @@ function renderReport(result) {
         .join("")
     : `<li class="finding"><span class="sev-badge sev-info">Info</span><span class="finding-body"><strong>Keine offenen Punkte gefunden</strong>Alle geprüften Bereiche sind unauffällig.</span></li>`;
 
+  const checklistHtml = allIssues.length
+    ? allIssues
+        .map(
+          (f) => `
+        <li class="checklist-item">
+          <span class="checklist-box"></span>
+          <span class="checklist-text">${f.title} <span class="checklist-cat">– ${f.categoryLabel}</span></span>
+        </li>`
+        )
+        .join("")
+    : `<li class="checklist-item"><span class="checklist-box checked"></span><span class="checklist-text">Keine offenen Punkte – nichts abzuhaken.</span></li>`;
+
   reportContent.innerHTML = `
     ${notice}
     <div class="report-header">
@@ -168,6 +187,11 @@ function renderReport(result) {
       <h2>Alle offenen Punkte auf einen Blick (${allIssues.length})</h2>
       <p class="issue-summary-sub">Genau das musst du auf deiner Seite anpassen, sortiert nach Dringlichkeit.</p>
       <ul class="findings-list issue-summary-list">${issuesHtml}</ul>
+    </div>
+    <div class="issue-checklist">
+      <h2>Checkliste zum Abarbeiten</h2>
+      <p class="issue-summary-sub">Zum Abhaken, während du deinen Shop korrigierst.</p>
+      <ul class="checklist">${checklistHtml}</ul>
     </div>
   `;
 

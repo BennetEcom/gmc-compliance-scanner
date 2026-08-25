@@ -112,7 +112,7 @@ POLICY_PATTERNS = {
 MIN_TRUSTED_DOMAIN_AGE_DAYS = 90  # unter 3 Monate = klassisches Dropshipping-Rot-Flag
 MIN_IMAGE_EDGE_PX = 250
 RECOMMENDED_IMAGE_EDGE_PX = 800
-MAX_LINKS_TO_CHECK = 160
+MAX_LINKS_TO_CHECK = 1000  # praktisch ungedeckelt: alle gefundenen Seiten werden geprüft, nichts wird übersprungen
 MAX_PRODUCTS_TO_SAMPLE = 25
 MAX_PRODUCT_PAGES_TO_FETCH = 18
 MAX_SITEMAP_ENTRIES = 500
@@ -441,7 +441,7 @@ async def check_broken_links(client: httpx.AsyncClient, base_url: str, homepage_
             return
         # Zwei Fehlversuche direkt hintereinander können ein Rate-Limit-Blip
         # sein – mit steigendem Abstand nochmal gegenprüfen, bevor wir urteilen.
-        for delay in (2.0, 4.0):
+        for delay in (1.5, 3.0):
             await asyncio.sleep(delay)
             status = await attempt("GET")
             if status is None:
@@ -455,7 +455,7 @@ async def check_broken_links(client: httpx.AsyncClient, base_url: str, homepage_
     await asyncio.gather(*(classify(u) for u in links))
 
     coverage_note = (
-        f" ({len(links)} von {total_discovered} gefundenen Seiten geprüft, Rest übersprungen um den Scan schnell zu halten)"
+        f" ({len(links)} von {total_discovered} gefundenen Seiten geprüft; die Sitemap-Erkennung selbst ist auf {MAX_SITEMAP_ENTRIES} Einträge begrenzt)"
         if total_discovered > len(links) else ""
     )
 
