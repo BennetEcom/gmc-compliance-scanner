@@ -3,15 +3,18 @@ GMC Compliance Scanner
 =======================
 Führt echte, live Checks gegen einen Shopify-Store (oder generisch jede
 Website) durch und bewertet die Wahrscheinlichkeit einer Google Merchant
-Center (GMC) Sperrung anhand von 7 Kategorien:
+Center (GMC) Sperrung anhand von 8 Kategorien. Die Checks sind gegen die
+"GMC Master Checklist" des Betreibers abgeglichen (Kategorien A-H davon,
+soweit ohne GMC-Login automatisiert prüfbar):
 
 1. Trust & Domain-Metriken (SSL, Domain-Alter, Erreichbarkeit)
 2. Broken Links (über die gesamte per Sitemap erkannte Seite, nicht nur die Startseite)
 3. Policy-Seiten (Impressum, Datenschutz, AGB, Widerruf, Versand, Kontakt)
-4. Produkt-Feed-Qualität (GTIN/Brand/Preis/Verfügbarkeit via Shopify products.json)
-5. Bild-Compliance (Auflösung, Alt-Text, erreichbar)
-6. Bewertungen & Social Proof (verifizierbare Plattform vs. nicht nachprüfbare/duplizierte Reviews)
-7. Künstliche Dringlichkeit/Verknappung ("Fake Urgency": Countdown-Apps, "nur noch X"-Behauptungen ohne echten Lagerbestand)
+4. Kontakt & Rechtliches (geschäftliche E-Mail, Telefon, NAP-Konsistenz, Platzhalter-Content, Standard-URLs)
+5. Produkt-Feed-Qualität (GTIN/Brand/Preis/SKU/Streichpreis/Condition via Shopify products.json, leere Nav-Kollektionen)
+6. Bild-Compliance (Auflösung, Alt-Text, erreichbar)
+7. Bewertungen & Social Proof (verifizierbare Plattform vs. nicht nachprüfbare/duplizierte Reviews)
+8. Künstliche Dringlichkeit/Verknappung ("Fake Urgency": Countdown-Apps, "nur noch X"-Behauptungen ohne echten Lagerbestand)
 
 Kein Login nötig, keine Datenspeicherung – alles läuft pro Request live.
 """
@@ -141,6 +144,42 @@ URGENCY_APP_SIGNATURES = [
     "hurrify", "fomo.com", "salespop", "sales-pop", "countdown-cart",
     "ultimatesalesboost", "zoorix", "kaching-bundles", "hextom",
     "countdown-timer-bar", "cartcountdown",
+]
+
+# --- Aus der GMC-Master-Checklist (Kategorie C/E): Kontakt- & Rechtstexte ---
+PERSONAL_EMAIL_DOMAINS = {
+    "gmail.com", "googlemail.com", "yahoo.com", "yahoo.de", "hotmail.com",
+    "hotmail.de", "outlook.com", "outlook.de", "gmx.de", "gmx.net", "web.de",
+    "icloud.com", "aol.com", "t-online.de",
+}
+EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
+PHONE_RE = re.compile(r"(\+?\d[\d\s()/\-]{7,}\d)")
+
+# Platzhalter-/Template-Reste, die laut Google-Support-Ticket (misrep 2026-07)
+# explizit als Ablehnungsgrund genannt wurden.
+PLACEHOLDER_PATTERNS = [
+    r"\[[a-z0-9 _\-]{2,40}\]",  # [Firmenname], [Adresse] etc.
+    r"lorem ipsum",
+    r"you@email\.com",
+    r"example\.com",
+    r"sample order",
+    r"john\s?doe",
+    r"123 main st",
+    r"your company name",
+    r"yourname@",
+]
+
+# Häufig unlinkte, aber von Google-Reviewern erratene Standard-URLs – müssen
+# auf eine echte Seite weiterleiten, dürfen niemals auf einem 404 enden.
+GUESSED_PATHS = [
+    "/pages/contact-us", "/pages/get-in-touch", "/pages/contact",
+    "/pages/about-us", "/pages/shipping", "/pages/shipping-policy",
+    "/pages/faq", "/pages/returns",
+]
+
+USED_CONDITION_KEYWORDS = [
+    "refurbished", "second-hand", "secondhand", "pre-owned", "preowned",
+    "gebraucht", "generalüberholt", "occasion",
 ]
 
 
@@ -396,24 +435,23 @@ async def check_broken_links(client: httpx.AsyncClient, base_url: str, homepage_
 # ---------------------------------------------------------------------------
 # 3) Policy-Seiten
 # ---------------------------------------------------------------------------
-async def check_policy_pages(client: httpx.AsyncClient, base_url: str, homepage_html: Optional[str]) -> CategoryResult:
+async def check_policy_pages(client: httpx.AsyncClient, base_url: str, homepage_html: Optional[str]) -> tuple[CategoryResult, dict[str, str]]:
     findings: list[Finding] = []
     found_keys = set()
+    found_urls: dict[str, str] = {}
 
     link_texts = []
     if homepage_html:
         soup = BeautifulSoup(homepage_html, "html.parser")
         for a in soup.find_all("a", href=True):
-            link_texts.append((a.get_text(" ", strip=True).lower(), a["href"].lower()))
+            link_texts.append((a.get_text(" ", strip=True).lower(), a["href"]))
 
     for key, meta in POLICY_PATTERNS.items():
-        matched = False
         for text, href in link_texts:
-            if any(kw in text for kw in meta["keywords"]) or any(kw.replace(" ", "-") in href for kw in meta["keywords"]):
-                matched = True
+            if any(kw in text for kw in meta["keywords"]) or any(kw.replace(" ", "-") in href.lower() for kw in meta["keywords"]):
+                found_keys.add(key)
+                found_urls[key] = urljoin(base_url + "/", href)
                 break
-        if matched:
-            found_keys.add(key)
 
     # Fallback: gängige Shopify-URL-Pfade direkt testen für nicht gefundene Policies
     guess_paths = {
@@ -429,9 +467,11 @@ async def check_policy_pages(client: httpx.AsyncClient, base_url: str, homepage_
         if key in found_keys:
             return
         for path in guess_paths.get(key, []):
-            resp = await fetch(client, urljoin(base_url, path))
+            url = urljoin(base_url, path)
+            resp = await fetch(client, url)
             if not isinstance(resp, Exception) and resp.status_code < 400:
                 found_keys.add(key)
+                found_urls[key] = url
                 return
 
     await asyncio.gather(*(try_guess(k) for k in POLICY_PATTERNS))
@@ -450,13 +490,145 @@ async def check_policy_pages(client: httpx.AsyncClient, base_url: str, homepage_
                                      "Häufigster Ablehnungsgrund bei GMC: fehlende oder nicht auffindbare Policy-Seite."))
 
     score = round(100 * (1 - lost_weight / total_weight)) if total_weight else 100
-    return CategoryResult("policy_pages", "Policy-Seiten", max(0, min(100, score)), findings)
+    return CategoryResult("policy_pages", "Policy-Seiten", max(0, min(100, score)), findings), found_urls
 
 
 # ---------------------------------------------------------------------------
-# 4) Produkt-Feed-Qualität (Shopify products.json)
+# 4) Kontakt & Rechtliches (aus der GMC-Master-Checklist, Kategorie C/E)
 # ---------------------------------------------------------------------------
-async def check_product_feed(client: httpx.AsyncClient, base_url: str) -> tuple[CategoryResult, list[dict]]:
+async def check_contact_legal(client: httpx.AsyncClient, base_url: str, homepage_html: Optional[str], policy_urls: dict[str, str]) -> CategoryResult:
+    findings: list[Finding] = []
+    score = 100
+
+    # Kontakt-/Rechtsseiten zusätzlich laden (Startseite reicht oft nicht für
+    # E-Mail/Telefon/NAP-Konsistenz-Checks).
+    extra_urls = [u for k, u in policy_urls.items() if k in ("contact", "impressum", "privacy")]
+    extra_pages = await fetch_product_pages(client, extra_urls[:3])  # generischer HTML-Fetch, Name passt trotzdem
+
+    pages_html: dict[str, str] = {"Startseite": homepage_html or ""}
+    for url, html in extra_pages:
+        pages_html[url] = html
+
+    combined_html = "\n".join(pages_html.values())
+    if not combined_html.strip():
+        findings.append(Finding("low", "Kontakt-Check nicht möglich", "Keine Seiteninhalte zum Analysieren geladen."))
+        return CategoryResult("contact_legal", "Kontakt & Rechtliches", 60, findings)
+
+    # 1) Geschäftliche E-Mail statt privatem Anbieter
+    emails_by_page = {url: set(EMAIL_RE.findall(html)) for url, html in pages_html.items()}
+    all_emails = set().union(*emails_by_page.values()) if emails_by_page else set()
+    host = urlparse(base_url).netloc.replace("www.", "")
+    if all_emails:
+        personal = {e for e in all_emails if e.split("@")[-1].lower() in PERSONAL_EMAIL_DOMAINS}
+        if personal and len(personal) == len(all_emails):
+            findings.append(Finding(
+                "medium", "Nur private E-Mail-Adresse(n) gefunden (z. B. Gmail/GMX)",
+                f"Gefunden: {', '.join(sorted(personal))}. GMC-Reviewer werten eine geschäftliche Adresse (info@{host}) als Vertrauenssignal.",
+            ))
+            score -= 15
+        else:
+            findings.append(Finding("info", "Geschäftliche E-Mail-Adresse gefunden", f"{', '.join(sorted(all_emails))[:200]}"))
+    else:
+        findings.append(Finding("high", "Keine E-Mail-Adresse im Seitentext gefunden", "Weder Startseite noch Kontakt-/Rechtsseiten enthalten eine erkennbare E-Mail-Adresse."))
+        score -= 20
+
+    # 2) Telefonnummer sichtbar
+    if not PHONE_RE.search(combined_html):
+        findings.append(Finding("medium", "Keine Telefonnummer gefunden", "Google-Reviewer werten eine sichtbare Telefonnummer als Vertrauenssignal (Checklist-Punkt C)."))
+        score -= 10
+    else:
+        findings.append(Finding("info", "Telefonnummer gefunden", "Eine Telefonnummer ist im Footer/Kontakt-Bereich erkennbar."))
+
+    # 3) NAP-Konsistenz: identische E-Mail über alle geprüften Seiten hinweg
+    non_empty_pages = {url: emails for url, emails in emails_by_page.items() if emails}
+    if len(non_empty_pages) >= 2:
+        distinct = set().union(*non_empty_pages.values())
+        if len(distinct) > 1:
+            findings.append(Finding(
+                "high", "Unterschiedliche E-Mail-Adressen auf verschiedenen Seiten",
+                f"Gefunden: {', '.join(sorted(distinct))}. Google verlangt identische Kontaktdaten auf Footer, Kontaktseite und Rechtstexten (NAP-Konsistenz).",
+            ))
+            score -= 20
+
+    # 4) Platzhalter-/Template-Reste
+    lower_combined = combined_html.lower()
+    placeholder_hits = {p for p in PLACEHOLDER_PATTERNS if re.search(p, lower_combined)}
+    if placeholder_hits:
+        findings.append(Finding(
+            "critical", "Platzhalter-/Beispieltext auf der Seite gefunden",
+            "Erkannte Muster wie eckige Klammern, 'Lorem Ipsum' oder Formular-Vorbelegungen (z. B. 'you@email.com'). Google hat das in einem Support-Ticket 2026-07 explizit als Ablehnungsgrund genannt.",
+        ))
+        score -= 25
+
+    # 5) Erratbare Standard-Pfade dürfen nicht auf 404 enden
+    async def check_guess(path: str):
+        resp = await fetch(client, urljoin(base_url, path))
+        if isinstance(resp, Exception) or resp.status_code >= 400:
+            return path
+        return None
+
+    dead_ends = [p for p in await asyncio.gather(*(check_guess(p) for p in GUESSED_PATHS)) if p]
+    if dead_ends:
+        findings.append(Finding(
+            "low", f"{len(dead_ends)} von {len(GUESSED_PATHS)} typischen Standard-URLs enden auf 404",
+            f"Beispiele: {', '.join(dead_ends[:4])}. Nicht kritisch, wenn diese Seiten nie existiert haben – idealerweise leiten geratene Standard-URLs auf eine echte Seite weiter statt auf einen Fehler.",
+        ))
+        score -= min(10, len(dead_ends) * 2)
+
+    score = max(0, min(100, score))
+    return CategoryResult("contact_legal", "Kontakt & Rechtliches", score, findings)
+
+
+# ---------------------------------------------------------------------------
+# 5) Produkt-Feed-Qualität (Shopify products.json)
+# ---------------------------------------------------------------------------
+MAX_NAV_COLLECTIONS_TO_CHECK = 6
+EMPTY_COLLECTION_THRESHOLD = 3
+
+
+async def check_nav_collections(client: httpx.AsyncClient, base_url: str, homepage_html: Optional[str]) -> list[Finding]:
+    """Prüft im Hauptmenü verlinkte Kollektionen: eine Nav-Kachel, die auf eine
+    leere/fast leere Kollektion zeigt, wirkt für Google-Reviewer wie ein
+    unfertiger Store (Source: misrep 2026-07, Google-Support-Runde)."""
+    if not homepage_html:
+        return []
+
+    soup = BeautifulSoup(homepage_html, "html.parser")
+    handles: set[str] = set()
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        m = re.search(r"/collections/([a-z0-9\-]+)", href, re.I)
+        if m and m.group(1) not in ("all", "frontpage"):
+            handles.add(m.group(1))
+    handles = list(handles)[:MAX_NAV_COLLECTIONS_TO_CHECK]
+
+    if not handles:
+        return []
+
+    empty: list[str] = []
+
+    async def check_one(handle: str):
+        resp = await fetch(client, urljoin(base_url, f"/collections/{handle}/products.json?limit=10"))
+        if isinstance(resp, Exception) or resp.status_code >= 400:
+            return
+        try:
+            count = len(resp.json().get("products", []))
+        except Exception:
+            return
+        if count <= EMPTY_COLLECTION_THRESHOLD:
+            empty.append(f"{handle} ({count})")
+
+    await asyncio.gather(*(check_one(h) for h in handles))
+
+    if not empty:
+        return []
+    return [Finding(
+        "medium", f"{len(empty)} im Menü verlinkte Kollektion(en) mit ≤{EMPTY_COLLECTION_THRESHOLD} Produkten",
+        f"Betroffen: {', '.join(empty)}. Eine Navigation, die auf eine leere/fast leere Kategorie zeigt, wirkt für Google-Reviewer wie ein unfertiger Store.",
+    )]
+
+
+async def check_product_feed(client: httpx.AsyncClient, base_url: str, homepage_html: Optional[str] = None) -> tuple[CategoryResult, list[dict]]:
     findings: list[Finding] = []
     products_sample: list[dict] = []
     score = 100
@@ -483,6 +655,9 @@ async def check_product_feed(client: httpx.AsyncClient, base_url: str) -> tuple[
     missing_price = 0
     missing_desc = 0
     thin_desc = 0
+    inverted_compare_at = 0
+    used_wording = 0
+    sku_counts: dict[str, int] = {}
 
     for p in products:
         products_sample.append(p)
@@ -499,12 +674,28 @@ async def check_product_feed(client: httpx.AsyncClient, base_url: str) -> tuple[
         if not has_price:
             missing_price += 1
 
+        for v in variants:
+            sku = (v.get("sku") or "").strip()
+            if sku:
+                sku_counts[sku] = sku_counts.get(sku, 0) + 1
+            price = float(v.get("price") or 0)
+            compare_at = v.get("compare_at_price")
+            if compare_at:
+                try:
+                    if float(compare_at) <= price:
+                        inverted_compare_at += 1
+                except (TypeError, ValueError):
+                    pass
+
         desc = re.sub("<[^<]+?>", "", p.get("body_html") or "").strip()
         if not desc:
             missing_desc += 1
         elif len(desc) < 100:
             thin_desc += 1
+        if any(re.search(rf"\b{kw}\b", desc, re.I) for kw in USED_CONDITION_KEYWORDS):
+            used_wording += 1
 
+    duplicate_skus = {sku: c for sku, c in sku_counts.items() if c > 1}
     n = len(products)
 
     def pct(x):
@@ -528,14 +719,38 @@ async def check_product_feed(client: httpx.AsyncClient, base_url: str) -> tuple[
         findings.append(Finding("low", f"{pct(thin_desc)}% der Produkte mit sehr kurzer Beschreibung (<100 Zeichen)", "Kurze/duplizierte Texte erhöhen das Risiko einer Ablehnung wegen 'Thin Content'."))
         score -= min(10, thin_desc * 2)
 
-    if not missing_gtin and not missing_brand and not missing_price and not missing_desc:
+    if duplicate_skus:
+        example = ", ".join(f"{sku} ({c}×)" for sku, c in list(duplicate_skus.items())[:5])
+        findings.append(Finding("high", f"{len(duplicate_skus)} SKU(s) mehrfach vergeben", f"Beispiele: {example}. SKUs müssen pro Variante eindeutig sein."))
+        score -= min(20, len(duplicate_skus) * 5)
+
+    if inverted_compare_at:
+        findings.append(Finding(
+            "high", f"{inverted_compare_at} Variante(n) mit unglaubwürdigem Streichpreis",
+            "Der 'Compare-at'-Preis (Streichpreis) ist kleiner oder gleich dem aktuellen Preis. Ein Streichpreis, der keinen echten Rabatt zeigt, ist ein klassisches Fake-Sale-Muster.",
+        ))
+        score -= min(20, inverted_compare_at * 5)
+
+    if used_wording:
+        findings.append(Finding(
+            "medium", f"{used_wording} Produktbeschreibung(en) mit 'gebraucht/refurbished'-Wortlaut",
+            "GMC verlangt condition=new für neue Ware; Wörter wie 'refurbished' oder 'gebraucht' in der Beschreibung widersprechen dem.",
+        ))
+        score -= min(15, used_wording * 5)
+
+    if not missing_gtin and not missing_brand and not missing_price and not missing_desc and not duplicate_skus and not inverted_compare_at and not used_wording:
         findings.append(Finding("info", "Stichprobe unauffällig", f"{n} Produkte geprüft, keine offensichtlichen Feed-Probleme gefunden."))
+
+    collection_findings = await check_nav_collections(client, base_url, homepage_html)
+    if collection_findings:
+        findings.extend(collection_findings)
+        score -= 10
 
     return CategoryResult("product_feed", "Produkt-Feed-Qualität", max(0, min(100, score)), findings), products_sample
 
 
 # ---------------------------------------------------------------------------
-# 5) Bild-Compliance
+# 6) Bild-Compliance
 # ---------------------------------------------------------------------------
 async def check_images(client: httpx.AsyncClient, base_url: str, products_sample: list[dict]) -> CategoryResult:
     findings: list[Finding] = []
@@ -620,7 +835,7 @@ _REVIEW_BLOCK_RE = re.compile(
 
 
 # ---------------------------------------------------------------------------
-# 6) Bewertungen & Social Proof
+# 7) Bewertungen & Social Proof
 # ---------------------------------------------------------------------------
 async def check_reviews(homepage_html: Optional[str], product_pages: list[tuple[str, str]]) -> CategoryResult:
     findings: list[Finding] = []
@@ -677,7 +892,7 @@ async def check_reviews(homepage_html: Optional[str], product_pages: list[tuple[
 
 
 # ---------------------------------------------------------------------------
-# 7) Künstliche Dringlichkeit / Verknappung ("Fake Urgency")
+# 8) Künstliche Dringlichkeit / Verknappung ("Fake Urgency")
 # ---------------------------------------------------------------------------
 async def check_urgency_patterns(product_pages: list[tuple[str, str]], products_sample: list[dict]) -> CategoryResult:
     findings: list[Finding] = []
@@ -752,25 +967,27 @@ async def run_scan(raw_url: str) -> dict:
         trust_task = check_trust_domain(client, base_url)
         links_task = check_broken_links(client, base_url, homepage_html, site_urls)
         policy_task = check_policy_pages(client, base_url, homepage_html)
-        feed_task = check_product_feed(client, base_url)
+        feed_task = check_product_feed(client, base_url, homepage_html)
 
-        trust_res, links_res, policy_res, (feed_res, products_sample) = await asyncio.gather(
+        trust_res, links_res, (policy_res, policy_urls), (feed_res, products_sample) = await asyncio.gather(
             trust_task, links_task, policy_task, feed_task
         )
         images_res = await check_images(client, base_url, products_sample)
+        contact_res = await check_contact_legal(client, base_url, homepage_html, policy_urls)
 
         product_pages = await fetch_product_pages(client, site_urls.get("product_urls", []))
         reviews_res = await check_reviews(homepage_html, product_pages)
         urgency_res = await check_urgency_patterns(product_pages, products_sample)
 
-    categories = [trust_res, links_res, policy_res, feed_res, images_res, reviews_res, urgency_res]
+    categories = [trust_res, links_res, policy_res, contact_res, feed_res, images_res, reviews_res, urgency_res]
 
     weights = {
-        "trust": 0.15,
-        "broken_links": 0.15,
-        "policy_pages": 0.20,
-        "product_feed": 0.20,
-        "images": 0.10,
+        "trust": 0.12,
+        "broken_links": 0.13,
+        "policy_pages": 0.17,
+        "contact_legal": 0.13,
+        "product_feed": 0.17,
+        "images": 0.08,
         "reviews": 0.10,
         "urgency": 0.10,
     }

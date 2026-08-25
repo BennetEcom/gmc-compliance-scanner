@@ -48,7 +48,35 @@ function updateHeroPreview(result) {
     .join("");
 }
 
+const LOADING_STEP_MS = 1100;
+let loadingTimer = null;
+
+function startLoadingAnimation() {
+  const items = Array.from(document.querySelectorAll("#loading-steps li"));
+  if (!items.length) return;
+  stopLoadingAnimation();
+  let i = 0;
+  const tick = () => {
+    items.forEach((el, idx) => {
+      el.classList.toggle("done", idx < i);
+      el.classList.toggle("active", idx === i);
+    });
+    i = (i + 1) % items.length;
+  };
+  tick();
+  loadingTimer = setInterval(tick, LOADING_STEP_MS);
+}
+
+function stopLoadingAnimation() {
+  if (loadingTimer) {
+    clearInterval(loadingTimer);
+    loadingTimer = null;
+  }
+  document.querySelectorAll("#loading-steps li").forEach((el) => el.classList.remove("active"));
+}
+
 function renderReport(result) {
+  stopLoadingAnimation();
   updateHeroPreview(result);
   reportSection.hidden = false;
   reportLoading.hidden = true;
@@ -107,9 +135,11 @@ function showLoading() {
   reportError.hidden = true;
   reportContent.hidden = true;
   reportSection.scrollIntoView({ behavior: "smooth", block: "start" });
+  startLoadingAnimation();
 }
 
 function showReportError(msg) {
+  stopLoadingAnimation();
   reportSection.hidden = false;
   reportLoading.hidden = true;
   reportContent.hidden = true;

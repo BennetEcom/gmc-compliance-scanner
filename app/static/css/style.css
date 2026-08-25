@@ -285,6 +285,46 @@ h1 {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.loading-steps {
+  list-style: none;
+  padding: 0;
+  margin: 28px auto 0;
+  max-width: 320px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.loading-steps li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--text-dim);
+  opacity: 0.45;
+  transition: opacity 0.3s ease, color 0.3s ease;
+}
+.loading-steps li::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+  flex-shrink: 0;
+}
+.loading-steps li.active { opacity: 1; color: var(--text); }
+.loading-steps li.active::before {
+  background: var(--gold);
+  box-shadow: 0 0 0 4px rgba(212, 175, 55, 0.18);
+  animation: step-pulse 1s ease-in-out infinite;
+}
+.loading-steps li.done { opacity: 0.75; }
+.loading-steps li.done::before { background: var(--green); box-shadow: none; animation: none; }
+@keyframes step-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.4); }
+}
+
 .report-error {
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);

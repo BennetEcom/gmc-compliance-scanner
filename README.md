@@ -2,18 +2,22 @@
 
 Landingpage + echter, live laufender Scanner, der einen Shopify-Store (oder
 generisch jede Website) gegen die wichtigsten Google-Merchant-Center-Regeln
-prüft. Pro Scan werden 10&nbsp;€ über Stripe berechnet; ein Promo-Code kann
-das für dich (den Owner) kostenlos machen.
+prüft. Aktuell komplett kostenlos (Stripe-Zahlung ist im Code vorbereitet,
+aber deaktiviert, solange keine Stripe-Keys gesetzt sind).
+
+Die Checks sind gegen die interne "GMC Master Checklist" abgeglichen (die
+Kategorien A-H davon, soweit ohne GMC-Login automatisiert prüfbar).
 
 ## Was der Scanner wirklich prüft
 
 1. **Trust & Domain** – HTTPS, SSL-Zertifikat-Gültigkeit, Domain-Alter (WHOIS)
 2. **Broken Links** – nicht nur die Startseite: Seiten werden zuerst über die Shopify-Sitemap (`sitemap.xml`) gesammelt (Fallback: Homepage-Links + `products.json`) und dann auf Fehlerstatus geprüft
 3. **Policy-Seiten** – Impressum, Datenschutz, AGB, Widerruf, Versand, Kontakt (häufigster GMC-Ablehnungsgrund)
-4. **Produkt-Feed-Qualität** – liest Shopifys öffentliches `/products.json` aus und prüft GTIN/Barcode, Marke, Preis, Beschreibungslänge
-5. **Bild-Compliance** – prüft, ob Produktbilder erreichbar sind und die von Google empfohlene Mindestauflösung erfüllen
-6. **Bewertungen & Social Proof** – erkennt bekannte Bewertungsplattformen (Trustpilot, Judge.me, Loox, Yotpo, …); fehlt eine solche trotz angezeigter Sternebewertungen, oder tauchen identische Rezensionstexte auf mehreren Produktseiten auf, wird das als nicht verifizierbar/möglich gefälscht markiert
-7. **Künstliche Dringlichkeit ("Fake Urgency")** – sucht nach Countdown-/Verknappungs-Apps und Formulierungen wie "nur noch X auf Lager"; wenn Shopify für die geprüften Produkte gar keinen Lagerbestand trackt, können solche Angaben nicht real sein (Verstoß gegen Googles Misrepresentation-Richtlinie)
+4. **Kontakt & Rechtliches** – geschäftliche E-Mail statt Gmail/GMX, sichtbare Telefonnummer, NAP-Konsistenz (identische Kontaktdaten über alle Seiten), Platzhalter-/Lorem-Ipsum-Reste, erratbare Standard-URLs (`/pages/contact-us` etc.), die nicht auf 404 enden dürfen
+5. **Produkt-Feed-Qualität** – liest Shopifys öffentliches `/products.json` aus und prüft GTIN/Barcode, Marke, Preis, Beschreibungslänge, eindeutige SKUs, Streichpreis-Plausibilität (Compare-at > Preis), "gebraucht/refurbished"-Wortlaut sowie leere/fast leere Kollektionen, die im Hauptmenü verlinkt sind
+6. **Bild-Compliance** – prüft, ob Produktbilder erreichbar sind und die von Google empfohlene Mindestauflösung erfüllen
+7. **Bewertungen & Social Proof** – erkennt bekannte Bewertungsplattformen (Trustpilot, Judge.me, Loox, Yotpo, …); fehlt eine solche trotz angezeigter Sternebewertungen, oder tauchen identische Rezensionstexte auf mehreren Produktseiten auf, wird das als nicht verifizierbar/möglich gefälscht markiert
+8. **Künstliche Dringlichkeit ("Fake Urgency")** – sucht nach Countdown-/Verknappungs-Apps und Formulierungen wie "nur noch X auf Lager"; wenn Shopify für die geprüften Produkte gar keinen Lagerbestand trackt, können solche Angaben nicht real sein (Verstoß gegen Googles Misrepresentation-Richtlinie)
 
 Alles läuft live pro Anfrage, es werden keine Scan-Ergebnisse dauerhaft
 gespeichert (nur ein kurzlebiger In-Memory-Cache pro Zahlungs-Session, damit

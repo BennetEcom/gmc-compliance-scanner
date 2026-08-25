@@ -59,7 +59,7 @@
           <div class="stat-label">neuer Dropshipping-Stores scheitern an mind. 1 GMC-Check</div>
         </div>
         <div class="stat">
-          <div class="stat-num">7</div>
+          <div class="stat-num">8</div>
           <div class="stat-label">Prüfbereiche in einem Scan</div>
         </div>
         <div class="stat">
@@ -85,6 +85,7 @@
           <ul id="hero-preview-list" class="preview-list">
             <li><span class="dot green"></span> Trust &amp; Domain</li>
             <li><span class="dot yellow"></span> Policy-Seiten</li>
+            <li><span class="dot yellow"></span> Kontakt &amp; Rechtliches</li>
             <li><span class="dot green"></span> Broken Links</li>
             <li><span class="dot red"></span> Produkt-Feed</li>
             <li><span class="dot yellow"></span> Bild-Compliance</li>
@@ -98,7 +99,7 @@
     <section class="section-head container">
       <p class="eyebrow">PRÜFBEREICHE</p>
       <h2>Alles, was Google wirklich prüft</h2>
-      <p class="section-sub">7 Kategorien, ein Scan – über den gesamten Shop, nicht nur die Startseite.</p>
+      <p class="section-sub">8 Kategorien, ein Scan – über den gesamten Shop, nicht nur die Startseite.</p>
     </section>
 
     <section class="features container" id="features">
@@ -119,9 +120,14 @@
           <p>Impressum, Datenschutz, AGB, Widerruf, Versand, Kontakt – häufigster GMC-Ablehnungsgrund.</p>
         </div>
         <div class="feature-card">
+          <div class="feature-icon">☎️</div>
+          <h3>Kontakt &amp; Rechtliches</h3>
+          <p>Geschäftliche E-Mail statt Gmail, Telefonnummer, NAP-Konsistenz und Platzhalter-Reste im Text.</p>
+        </div>
+        <div class="feature-card">
           <div class="feature-icon">📦</div>
           <h3>Produkt-Feed</h3>
-          <p>GTIN/Barcode, Marke, Preis und Beschreibungslänge direkt aus deinem products.json.</p>
+          <p>GTIN/Barcode, Marke, Preis, eindeutige SKUs und Streichpreis-Plausibilität aus deinem products.json.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">🖼️</div>
@@ -213,7 +219,16 @@
   <section id="report-section" class="report-section container" hidden>
     <div id="report-loading" class="report-loading" hidden>
       <div class="spinner"></div>
-      <p>Scan läuft – Trust, Links, Policies, Feed, Bilder, Bewertungen &amp; Urgency werden geprüft…</p>
+      <ul id="loading-steps" class="loading-steps">
+        <li>Trust &amp; Domain prüfen</li>
+        <li>Sitemap crawlen</li>
+        <li>Policy-Seiten suchen</li>
+        <li>Kontaktdaten abgleichen</li>
+        <li>Produkt-Feed lesen</li>
+        <li>Bilder prüfen</li>
+        <li>Bewertungen analysieren</li>
+        <li>Urgency-Muster scannen</li>
+      </ul>
     </div>
     <div id="report-error" class="report-error" hidden></div>
     <div id="report-content" class="report-content" hidden></div>
