@@ -187,6 +187,7 @@ form.addEventListener("submit", async (e) => {
   btn.disabled = true;
   btn.textContent = "Wird geprüft...";
   const scanStarted = Date.now();
+  showLoading();
 
   try {
     const resp = await fetch("/api/start-scan", {
