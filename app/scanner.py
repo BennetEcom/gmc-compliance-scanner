@@ -415,14 +415,14 @@ async def check_broken_links(client: httpx.AsyncClient, base_url: str, homepage_
     links = list(site_urls.get("all", []))
     total_discovered = site_urls.get("total_discovered", len(links))
 
-    # Statuscodes, die auf Firewall/Bot-Schutz/Rate-Limit hindeuten statt auf
-    # eine echte tote Seite. Ein Scan, der viele Links kurz hintereinander
-    # abruft, kann genau das selbst auslösen – das darf nicht als "broken"
-    # gewertet werden.
-    BLOCK_STATUSES = {403, 429, 503}
+    # Nur ein echtes "404 Not Found" gilt als Broken Link – wie bei
+    # deadlinkchecker.com & Co. Alle anderen Fehlerstatus (403/429/5xx,
+    # Timeouts) werden separat ausgewiesen statt fälschlich mitgezählt zu
+    # werden, z. B. weil ein Scan selbst ein Rate-Limit auslöst.
+    CONFIRMED_BROKEN_STATUSES = {404}
 
     broken: list[tuple[str, object]] = []
-    blocked: list[tuple[str, object]] = []
+    other_errors: list[tuple[str, object]] = []
 
     async def classify(url: str):
         async def attempt(method: str):
@@ -447,10 +447,10 @@ async def check_broken_links(client: httpx.AsyncClient, base_url: str, homepage_
             if status is None:
                 return
 
-        if status == "error" or status in BLOCK_STATUSES:
-            blocked.append((url, status))
-        else:
+        if status in CONFIRMED_BROKEN_STATUSES:
             broken.append((url, status))
+        else:
+            other_errors.append((url, status))
 
     await asyncio.gather(*(classify(u) for u in links))
 
@@ -465,29 +465,31 @@ async def check_broken_links(client: httpx.AsyncClient, base_url: str, homepage_
 
         if broken:
             shown = broken[:25]
-            preview = "\n".join(f"• {u} ({status})" for u, status in shown)
+            preview = "\n".join(f"• {u}" for u, _ in shown)
             if len(broken) > len(shown):
                 preview += f"\n… und {len(broken) - len(shown)} weitere"
             findings.append(Finding(
                 "high" if ratio_broken > 0.15 else "medium",
-                f"{len(broken)} von {len(links)} geprüften Seiten/Links fehlerhaft{coverage_note}",
+                f"{len(broken)} von {len(links)} geprüften Seiten mit 404 (Broken Link){coverage_note}",
                 preview,
             ))
-        elif not blocked:
-            findings.append(Finding("info", "Keine Broken Links gefunden", f"{len(links)} Seiten/interne Links geprüft{coverage_note}, alle erreichbar."))
+        elif not other_errors:
+            findings.append(Finding("info", "Keine Broken Links (404) gefunden", f"{len(links)} Seiten/interne Links geprüft{coverage_note}, alle erreichbar."))
+        else:
+            findings.append(Finding("info", "Keine echten 404-Fehler gefunden", f"{len(links)} Seiten geprüft{coverage_note} – kein einziger 404, siehe unten für andere Statuscodes."))
 
-        if blocked:
-            shown = blocked[:15]
+        if other_errors:
+            shown = other_errors[:15]
             preview = "\n".join(f"• {u} ({status})" for u, status in shown)
-            if len(blocked) > len(shown):
-                preview += f"\n… und {len(blocked) - len(shown)} weitere"
+            if len(other_errors) > len(shown):
+                preview += f"\n… und {len(other_errors) - len(shown)} weitere"
             findings.append(Finding(
-                "low", f"{len(blocked)} von {len(links)} Seiten durch Bot-/Rate-Limit-Schutz blockiert (nicht sicher prüfbar){coverage_note}",
-                f"Statuscodes wie 403/429 sprechen für eine Firewall/Bot-Schutz-Reaktion auf den Scan selbst, nicht für tote Links – wurde daher nicht als Broken Link gewertet:\n{preview}",
+                "low", f"{len(other_errors)} von {len(links)} Seiten mit anderem Fehlerstatus, kein 404 (nicht als Broken Link gewertet){coverage_note}",
+                f"Statuscodes wie 403/429/5xx oder Timeouts bedeuten nicht \"Seite existiert nicht\", sondern meist Firewall-/Rate-Limit-Reaktionen auf den Scan selbst – deshalb hier separat und nicht in der Broken-Link-Zahl:\n{preview}",
             ))
-            # Nur ein kleiner Abzug: die Blockade ist ein Unsicherheitsfaktor,
-            # kein bestätigter Fehler.
-            score -= min(10, round(5 * len(blocked) / len(links)))
+            # Nur ein kleiner Abzug: unklarer Status ist ein Unsicherheitsfaktor,
+            # kein bestätigter Broken Link.
+            score -= min(10, round(5 * len(other_errors) / len(links)))
     else:
         findings.append(Finding("low", "Keine internen Links gefunden", "Es konnten keine prüfbaren internen Seiten gefunden werden."))
         score = 70
