@@ -112,10 +112,10 @@ POLICY_PATTERNS = {
 MIN_TRUSTED_DOMAIN_AGE_DAYS = 90  # unter 3 Monate = klassisches Dropshipping-Rot-Flag
 MIN_IMAGE_EDGE_PX = 250
 RECOMMENDED_IMAGE_EDGE_PX = 800
-MAX_LINKS_TO_CHECK = 60
-MAX_PRODUCTS_TO_SAMPLE = 8
-MAX_PRODUCT_PAGES_TO_FETCH = 6
-MAX_SITEMAP_ENTRIES = 300
+MAX_LINKS_TO_CHECK = 160
+MAX_PRODUCTS_TO_SAMPLE = 25
+MAX_PRODUCT_PAGES_TO_FETCH = 18
+MAX_SITEMAP_ENTRIES = 500
 
 # --- Bekannte, seriöse Bewertungs-Plattformen (Script-/Domain-Signaturen) ---
 # Wird ein solcher Anbieter erkannt, gelten angezeigte Sternebewertungen als
@@ -646,7 +646,7 @@ async def check_contact_legal(client: httpx.AsyncClient, base_url: str, homepage
 # ---------------------------------------------------------------------------
 # 5) Produkt-Feed-Qualität (Shopify products.json)
 # ---------------------------------------------------------------------------
-MAX_NAV_COLLECTIONS_TO_CHECK = 6
+MAX_NAV_COLLECTIONS_TO_CHECK = 15
 EMPTY_COLLECTION_THRESHOLD = 3
 
 
@@ -822,13 +822,13 @@ async def check_images(client: httpx.AsyncClient, base_url: str, products_sample
 
     image_urls = []
     for p in products_sample:
-        for img in (p.get("images") or [])[:2]:
+        for img in (p.get("images") or [])[:3]:
             src = img.get("src")
             if src:
                 # Shopify liefert Bild-URLs oft absolut, protocol-relativ ("//cdn...")
                 # oder relativ zur Domain - alle Fälle auf eine absolute URL normalisieren.
                 image_urls.append(urljoin(base_url + "/", src))
-    image_urls = image_urls[:15]
+    image_urls = image_urls[:50]
 
     if not image_urls:
         findings.append(Finding("low", "Keine Produktbilder zum Prüfen gefunden", "Bild-Compliance konnte nicht automatisch bewertet werden."))
