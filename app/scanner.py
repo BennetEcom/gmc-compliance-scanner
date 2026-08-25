@@ -417,11 +417,14 @@ async def check_broken_links(client: httpx.AsyncClient, base_url: str, homepage_
             if total_discovered > len(links) else ""
         )
         if broken:
-            preview = ", ".join(broken[:5])
+            shown = broken[:25]
+            preview = "\n".join(f"• {u}" for u in shown)
+            if len(broken) > len(shown):
+                preview += f"\n… und {len(broken) - len(shown)} weitere"
             findings.append(Finding(
                 "high" if ratio_broken > 0.15 else "medium",
                 f"{len(broken)} von {len(links)} geprüften Seiten/Links fehlerhaft{coverage_note}",
-                f"Beispiele: {preview}",
+                preview,
             ))
         else:
             findings.append(Finding("info", "Keine Broken Links gefunden", f"{len(links)} Seiten/interne Links geprüft{coverage_note}, alle erreichbar."))
@@ -569,9 +572,10 @@ async def check_contact_legal(client: httpx.AsyncClient, base_url: str, homepage
 
     dead_ends = [p for p in await asyncio.gather(*(check_guess(p) for p in GUESSED_PATHS)) if p]
     if dead_ends:
+        listing = "\n".join(f"• {base_url}{p}" for p in dead_ends)
         findings.append(Finding(
             "low", f"{len(dead_ends)} von {len(GUESSED_PATHS)} typischen Standard-URLs enden auf 404",
-            f"Beispiele: {', '.join(dead_ends[:4])}. Nicht kritisch, wenn diese Seiten nie existiert haben – idealerweise leiten geratene Standard-URLs auf eine echte Seite weiter statt auf einen Fehler.",
+            f"{listing}\nNicht kritisch, wenn diese Seiten nie existiert haben – idealerweise leiten geratene Standard-URLs auf eine echte Seite weiter statt auf einen Fehler.",
         ))
         score -= min(10, len(dead_ends) * 2)
 
@@ -720,8 +724,8 @@ async def check_product_feed(client: httpx.AsyncClient, base_url: str, homepage_
         score -= min(10, thin_desc * 2)
 
     if duplicate_skus:
-        example = ", ".join(f"{sku} ({c}×)" for sku, c in list(duplicate_skus.items())[:5])
-        findings.append(Finding("high", f"{len(duplicate_skus)} SKU(s) mehrfach vergeben", f"Beispiele: {example}. SKUs müssen pro Variante eindeutig sein."))
+        listing = "\n".join(f"• {sku} ({c}×)" for sku, c in duplicate_skus.items())
+        findings.append(Finding("high", f"{len(duplicate_skus)} SKU(s) mehrfach vergeben", f"{listing}\nSKUs müssen pro Variante eindeutig sein."))
         score -= min(20, len(duplicate_skus) * 5)
 
     if inverted_compare_at:

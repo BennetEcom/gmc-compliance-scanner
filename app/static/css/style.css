@@ -227,6 +227,7 @@ h1 {
 .feature-list { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-direction: column; gap: 7px; }
 .feature-list li { font-size: 13px; color: var(--text-dim); padding-left: 20px; position: relative; line-height: 1.4; }
 .feature-list li::before { content: "✓"; position: absolute; left: 0; color: var(--gold-soft); font-weight: 700; }
+.feature-list li.blurred { filter: blur(3.5px); opacity: 0.7; user-select: none; }
 
 /* How it works */
 .how { padding: 40px 24px 72px; text-align: center; }
@@ -281,12 +282,30 @@ h1 {
 /* Report */
 .report-section { padding: 20px 24px 80px; }
 .report-loading { text-align: center; padding: 60px 0; color: var(--text-dim); }
-.spinner {
-  width: 40px; height: 40px; margin: 0 auto 18px;
-  border: 3px solid var(--border); border-top-color: var(--gold);
-  border-radius: 50%; animation: spin 0.9s linear infinite;
+.scan-bar {
+  width: 100%;
+  max-width: 320px;
+  height: 6px;
+  margin: 0 auto;
+  background: var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
+.scan-bar-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 40%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--gold), var(--gold-soft));
+  animation: scan-bar-slide 1.4s ease-in-out infinite;
+}
+@keyframes scan-bar-slide {
+  0% { left: -40%; }
+  100% { left: 100%; }
+}
 
 .loading-steps {
   list-style: none;
@@ -373,6 +392,7 @@ h1 {
 .sev-low { background: rgba(148,163,184,0.15); color: #b7c0d4; }
 .sev-info { background: rgba(34,197,94,0.12); color: var(--green); }
 .finding-body strong { color: var(--text); display: block; margin-bottom: 2px; }
+.finding-body { white-space: pre-line; word-break: break-word; }
 
 .notice-banner {
   background: rgba(212,175,55,0.1); border: 1px solid rgba(212,175,55,0.3);
