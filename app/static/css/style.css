@@ -224,6 +224,9 @@ h1 {
 }
 .feature-card h3, .why-card h3 { margin: 0 0 8px; font-size: 16px; }
 .feature-card p, .why-card p { color: var(--text-dim); font-size: 14px; margin: 0; line-height: 1.5; }
+.feature-list { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-direction: column; gap: 7px; }
+.feature-list li { font-size: 13px; color: var(--text-dim); padding-left: 20px; position: relative; line-height: 1.4; }
+.feature-list li::before { content: "✓"; position: absolute; left: 0; color: var(--gold-soft); font-weight: 700; }
 
 /* How it works */
 .how { padding: 40px 24px 72px; text-align: center; }
