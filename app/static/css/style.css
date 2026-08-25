@@ -399,6 +399,20 @@ h1 {
 .sev-info { background: rgba(34,197,94,0.12); color: var(--green); }
 .finding-body strong { color: var(--text); display: block; margin-bottom: 2px; }
 .finding-body { white-space: pre-line; word-break: break-word; }
+.finding-category {
+  display: inline-block; font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.03em; color: var(--gold-soft); background: rgba(212,175,55,0.1);
+  padding: 1px 8px; border-radius: 999px; margin: 0 0 4px;
+}
+
+.issue-summary {
+  background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 24px 22px; margin-top: 18px;
+}
+.issue-summary h2 { margin: 0 0 6px; font-size: 19px; }
+.issue-summary-sub { color: var(--text-dim); font-size: 13.5px; margin: 0 0 18px; }
+.issue-summary-list .finding { padding: 12px 0; border-top: 1px solid var(--border); }
+.issue-summary-list .finding:first-child { border-top: none; padding-top: 0; }
 
 .notice-banner {
   background: rgba(212,175,55,0.1); border: 1px solid rgba(212,175,55,0.3);

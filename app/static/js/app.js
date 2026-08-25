@@ -126,6 +126,27 @@ function renderReport(result) {
   const reportRingColor = scoreColor(result.overall_score);
   const reportRingOffset = RING_CIRCUMFERENCE * (1 - result.overall_score / 100);
 
+  const SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+  const allIssues = result.categories
+    .flatMap((cat) =>
+      cat.findings
+        .filter((f) => f.severity !== "info")
+        .map((f) => ({ ...f, categoryLabel: cat.label }))
+    )
+    .sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
+
+  const issuesHtml = allIssues.length
+    ? allIssues
+        .map(
+          (f) => `
+        <li class="finding">
+          <span class="sev-badge sev-${f.severity}">${severityLabel(f.severity)}</span>
+          <span class="finding-body"><strong>${f.title}</strong><span class="finding-category">${f.categoryLabel}</span>${f.detail}</span>
+        </li>`
+        )
+        .join("")
+    : `<li class="finding"><span class="sev-badge sev-info">Info</span><span class="finding-body"><strong>Keine offenen Punkte gefunden</strong>Alle geprüften Bereiche sind unauffällig.</span></li>`;
+
   reportContent.innerHTML = `
     ${notice}
     <div class="report-header">
@@ -143,6 +164,11 @@ function renderReport(result) {
       </div>
     </div>
     <div class="category-grid">${categoriesHtml}</div>
+    <div class="issue-summary">
+      <h2>Alle offenen Punkte auf einen Blick (${allIssues.length})</h2>
+      <p class="issue-summary-sub">Genau das musst du auf deiner Seite anpassen, sortiert nach Dringlichkeit.</p>
+      <ul class="findings-list issue-summary-list">${issuesHtml}</ul>
+    </div>
   `;
 
   reportContent.scrollIntoView({ behavior: "smooth", block: "start" });
