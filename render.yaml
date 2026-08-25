@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: gmc-compliance-scanner
+    env: python
+    plan: starter
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: STRIPE_PRICE_ID
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
+      - key: OWNER_BYPASS_CODE
+        sync: false
+      - key: APP_SECRET
+        sync: false

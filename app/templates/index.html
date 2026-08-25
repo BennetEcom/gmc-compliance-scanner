@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GMC Compliance Scanner – Prüfe deinen Store vor der Google-Sperrung</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <div class="bg-glow"></div>
+
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <div class="brand">
+        <span class="brand-mark">◆</span>
+        <span class="brand-name">GMC<span class="accent">Guard</span></span>
+      </div>
+      <div class="topbar-badges">
+        <span class="pill">🔒 Keine Anmeldung nötig</span>
+        <span class="pill">🗑️ Keine Datenspeicherung</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="hero" class="hero container">
+      <div class="hero-copy">
+        <p class="eyebrow">AI GMC Compliance Scan</p>
+        <h1>Bevor Google dich sperrt, <span class="accent">solltest du es wissen.</span></h1>
+        <p class="lead">
+          Wir prüfen deinen Shop live gegen die wichtigsten Google&nbsp;Merchant&nbsp;Center
+          Richtlinien – Trust &amp; Domain, Broken Links, Pflicht-Seiten, Produkt-Feed und
+          Bild-Compliance. Ergebnis in unter 60 Sekunden.
+        </p>
+
+        <form id="scan-form" class="scan-form">
+          <div class="input-row">
+            <input
+              id="store-url"
+              type="text"
+              placeholder="deinshop.myshopify.com"
+              required
+              autocomplete="off"
+            />
+            <button type="submit" id="scan-btn">
+              Scan starten – {{ price }}&nbsp;€
+            </button>
+          </div>
+          <div class="promo-row">
+            <input
+              id="promo-code"
+              type="text"
+              placeholder="Rabatt-/Promo-Code (optional)"
+              autocomplete="off"
+            />
+            <span class="promo-hint">Codes für zahlende Kund:innen werden im nächsten Schritt bei der Kasse eingegeben.</span>
+          </div>
+          <p id="form-error" class="form-error" hidden></p>
+        </form>
+
+        <div class="stat-row">
+          <div class="stat">
+            <div class="stat-num">73%</div>
+            <div class="stat-label">neuer Dropshipping-Stores scheitern an mind. 1 GMC-Check</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num">5</div>
+            <div class="stat-label">Prüfbereiche in einem Scan</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num">&lt;60s</div>
+            <div class="stat-label">bis zum vollständigen Report</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-visual">
+        <div class="scorecard-preview">
+          <div class="scorecard-header">
+            <span>Compliance Score</span>
+            <span class="badge-live">LIVE</span>
+          </div>
+          <div class="score-ring-preview">
+            <svg viewBox="0 0 120 120">
+              <circle cx="60" cy="60" r="52" class="ring-bg" />
+              <circle cx="60" cy="60" r="52" class="ring-fg" />
+            </svg>
+            <div class="score-ring-num">78</div>
+          </div>
+          <ul class="preview-list">
+            <li><span class="dot green"></span> Trust &amp; Domain</li>
+            <li><span class="dot yellow"></span> Policy-Seiten</li>
+            <li><span class="dot green"></span> Broken Links</li>
+            <li><span class="dot red"></span> Produkt-Feed</li>
+            <li><span class="dot yellow"></span> Bild-Compliance</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="how container" id="how">
+      <h2>So funktioniert's</h2>
+      <div class="how-grid">
+        <div class="how-card">
+          <div class="how-num">1</div>
+          <h3>URL eingeben</h3>
+          <p>Trag die Domain deines Shops ein – keine Anmeldung, kein Zugriff auf dein Backend nötig.</p>
+        </div>
+        <div class="how-card">
+          <div class="how-num">2</div>
+          <h3>Sicher bezahlen</h3>
+          <p>Einmalig {{ price }}&nbsp;€ pro Scan über Stripe. Rabattcodes kannst du direkt an der Kasse einlösen.</p>
+        </div>
+        <div class="how-card">
+          <div class="how-num">3</div>
+          <h3>Report erhalten</h3>
+          <p>Score, Ampel-Bewertung pro Kategorie und konkrete To-Dos – direkt auf der Seite.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="trust-strip container">
+      <p>Vertraut von E-Commerce-Teams, die ihr Google-Ads-Budget nicht riskieren wollen.</p>
+    </section>
+  </main>
+
+  <section id="report-section" class="report-section container" hidden>
+    <div id="report-loading" class="report-loading" hidden>
+      <div class="spinner"></div>
+      <p>Scan läuft – Trust, Links, Policies, Feed &amp; Bilder werden geprüft…</p>
+    </div>
+    <div id="report-error" class="report-error" hidden></div>
+    <div id="report-content" class="report-content" hidden></div>
+  </section>
+
+  <footer class="footer">
+    <div class="container">
+      <p>© <span id="year"></span> GMCGuard – Ein Tool von Icarus Agency. Kein offizielles Google-Produkt, keine Haftung für Entscheidungen des Google Merchant Center.</p>
+    </div>
+  </footer>
+
+  <script>
+    window.__PENDING_SESSION_ID__ = {{ pending_session_id | tojson }};
+  </script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
