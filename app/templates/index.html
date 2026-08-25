@@ -84,11 +84,11 @@
           <div class="score-ring-preview">
             <svg viewBox="0 0 120 120">
               <circle cx="60" cy="60" r="52" class="ring-bg" />
-              <circle cx="60" cy="60" r="52" class="ring-fg" />
+              <circle id="hero-score-ring" cx="60" cy="60" r="52" class="ring-fg" />
             </svg>
-            <div class="score-ring-num">78</div>
+            <div id="hero-score-num" class="score-ring-num">78</div>
           </div>
-          <ul class="preview-list">
+          <ul id="hero-preview-list" class="preview-list">
             <li><span class="dot green"></span> Trust &amp; Domain</li>
             <li><span class="dot yellow"></span> Policy-Seiten</li>
             <li><span class="dot green"></span> Broken Links</li>
@@ -125,12 +125,27 @@
     <section class="trust-strip container">
       <p>Vertraut von E-Commerce-Teams, die ihr Google-Ads-Budget nicht riskieren wollen.</p>
     </section>
+
+    <section class="why container" id="why">
+      <h2>Warum GMCGuard</h2>
+      <div class="why-slider-wrap">
+        <button type="button" class="why-nav why-prev" aria-label="Zurück">‹</button>
+        <ul id="why-slider" class="why-slider">
+          <li class="why-card">Erkennt Google-Merchant-Center-Risiken, bevor Google den Account sperrt.</li>
+          <li class="why-card">Prüft in unter 60&nbsp;Sekunden Policy-Seiten, Produkt-Feed, Bilder, Bewertungen und Fake-Urgency-Muster.</li>
+          <li class="why-card">Scannt den gesamten Shop über die Sitemap – nicht nur die Startseite.</li>
+          <li class="why-card">Basiert auf den häufigsten realen GMC-Ablehnungsgründen, nicht auf Vermutungen.</li>
+          <li class="why-card">Keine Anmeldung, kein Zugriff auf dein Backend, keine dauerhafte Datenspeicherung.</li>
+        </ul>
+        <button type="button" class="why-nav why-next" aria-label="Weiter">›</button>
+      </div>
+    </section>
   </main>
 
   <section id="report-section" class="report-section container" hidden>
     <div id="report-loading" class="report-loading" hidden>
       <div class="spinner"></div>
-      <p>Scan läuft – Trust, Links, Policies, Feed &amp; Bilder werden geprüft…</p>
+      <p>Scan läuft – Trust, Links, Policies, Feed, Bilder, Bewertungen &amp; Urgency werden geprüft…</p>
     </div>
     <div id="report-error" class="report-error" hidden></div>
     <div id="report-content" class="report-content" hidden></div>

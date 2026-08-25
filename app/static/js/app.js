@@ -1,5 +1,16 @@
 document.getElementById("year").textContent = new Date().getFullYear();
 
+const whySlider = document.getElementById("why-slider");
+if (whySlider) {
+  const scrollByCard = (dir) => {
+    const card = whySlider.querySelector(".why-card");
+    const step = card ? card.getBoundingClientRect().width + 16 : 280;
+    whySlider.scrollBy({ left: dir * step, behavior: "smooth" });
+  };
+  document.querySelector(".why-prev")?.addEventListener("click", () => scrollByCard(-1));
+  document.querySelector(".why-next")?.addEventListener("click", () => scrollByCard(1));
+}
+
 const form = document.getElementById("scan-form");
 const btn = document.getElementById("scan-btn");
 const errBox = document.getElementById("form-error");
@@ -28,7 +39,28 @@ function riskClass(score) {
   return "risk-red";
 }
 
+const RING_CIRCUMFERENCE = 326.7;
+
+function updateHeroPreview(result) {
+  const ring = document.getElementById("hero-score-ring");
+  const num = document.getElementById("hero-score-num");
+  const list = document.getElementById("hero-preview-list");
+  if (!ring || !num || !list) return;
+
+  const score = result.overall_score;
+  const color = score >= 80 ? "green" : score >= 50 ? "yellow" : "red";
+  num.textContent = score;
+  ring.style.strokeDashoffset = RING_CIRCUMFERENCE * (1 - score / 100);
+  ring.classList.remove("green", "yellow", "red");
+  ring.classList.add(color);
+
+  list.innerHTML = result.categories
+    .map((cat) => `<li><span class="dot ${statusColor(cat.status)}"></span> ${cat.label}</li>`)
+    .join("");
+}
+
 function renderReport(result) {
+  updateHeroPreview(result);
   reportSection.hidden = false;
   reportLoading.hidden = true;
   reportError.hidden = true;
