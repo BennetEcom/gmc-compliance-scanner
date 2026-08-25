@@ -1,16 +1,5 @@
 document.getElementById("year").textContent = new Date().getFullYear();
 
-const whySlider = document.getElementById("why-slider");
-if (whySlider) {
-  const scrollByCard = (dir) => {
-    const card = whySlider.querySelector(".why-card");
-    const step = card ? card.getBoundingClientRect().width + 16 : 280;
-    whySlider.scrollBy({ left: dir * step, behavior: "smooth" });
-  };
-  document.querySelector(".why-prev")?.addEventListener("click", () => scrollByCard(-1));
-  document.querySelector(".why-next")?.addEventListener("click", () => scrollByCard(1));
-}
-
 const form = document.getElementById("scan-form");
 const btn = document.getElementById("scan-btn");
 const errBox = document.getElementById("form-error");
