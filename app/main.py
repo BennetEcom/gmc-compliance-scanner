@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException, Request
@@ -26,6 +27,23 @@ app = FastAPI(title="GMC Compliance Scanner")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
+
+def _asset_version(*paths: str) -> str:
+    """mtime-basierte Cache-Busting-Version: ändert sich automatisch bei jedem
+    Deploy, in dem sich CSS/JS geändert haben, ohne dass wir eine Versionsnummer
+    manuell pflegen müssen. Verhindert, dass Besucher:innen nach einem Redesign
+    die alte, vom Browser gecachte CSS-Datei weiter ausgeliefert bekommen."""
+    newest = 0.0
+    for p in paths:
+        try:
+            newest = max(newest, os.path.getmtime(p))
+        except OSError:
+            pass
+    return str(int(newest)) or "1"
+
+
+ASSET_VERSION = _asset_version("app/static/css/style.css", "app/static/js/app.js")
+
 # Nur In-Memory-Zähler für den Betreiber (kein Tracking von Besucher:innen,
 # keine IPs/Cookies) – setzt sich bei jedem Deploy/Neustart zurück, passt zur
 # "keine Datenspeicherung"-Zusage der Seite.
@@ -51,6 +69,7 @@ async def index(request: Request):
         {
             "request": request,
             "stripe_configured": is_stripe_configured(),
+            "asset_v": ASSET_VERSION,
             "pending_session_id": None,
         },
     )
@@ -92,6 +111,7 @@ async def scan_result_page(request: Request, session_id: str | None = None):
         {
             "request": request,
             "stripe_configured": is_stripe_configured(),
+            "asset_v": ASSET_VERSION,
             "pending_session_id": session_id,
         },
     )
