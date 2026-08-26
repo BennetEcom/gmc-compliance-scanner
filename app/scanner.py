@@ -15,6 +15,7 @@ soweit ohne GMC-Login automatisiert prüfbar):
 6. Bild-Compliance (Auflösung, Alt-Text, erreichbar)
 7. Bewertungen & Social Proof (verifizierbare Plattform vs. nicht nachprüfbare/duplizierte Reviews)
 8. Künstliche Dringlichkeit/Verknappung ("Fake Urgency": Countdown-Apps, "nur noch X"-Behauptungen ohne echten Lagerbestand)
+9. Page Speed (Google PageSpeed Insights/Lighthouse: Performance-Score, LCP, CLS, TBT – mobil)
 
 Kein Login nötig, keine Datenspeicherung – alles läuft pro Request live.
 """
@@ -33,6 +34,8 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
+
+from app.config import PAGESPEED_API_KEY
 
 try:
     import whois as pywhois
@@ -241,10 +244,10 @@ class CategoryResult:
         }
 
 
-async def fetch(client: httpx.AsyncClient, url: str, method: str = "GET", **kw):
+async def fetch(client: httpx.AsyncClient, url: str, method: str = "GET", timeout: Optional[httpx.Timeout] = None, **kw):
     async with _get_http_concurrency():
         try:
-            resp = await client.request(method, url, timeout=REQUEST_TIMEOUT, follow_redirects=True, **kw)
+            resp = await client.request(method, url, timeout=timeout or REQUEST_TIMEOUT, follow_redirects=True, **kw)
             return resp
         except Exception as exc:  # noqa: BLE001
             return exc
@@ -870,6 +873,106 @@ async def check_images(client: httpx.AsyncClient, base_url: str, products_sample
 
 
 # ---------------------------------------------------------------------------
+# 9) Page Speed (Google PageSpeed Insights / Lighthouse)
+# ---------------------------------------------------------------------------
+PAGESPEED_API_URL = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
+# Lighthouse läuft serverseitig bei Google einen vollen Audit-Durchlauf – das
+# dauert deutlich länger als ein normaler HTTP-Request.
+PAGESPEED_TIMEOUT = httpx.Timeout(45.0, connect=10.0)
+
+
+async def check_page_speed(client: httpx.AsyncClient, base_url: str) -> CategoryResult:
+    findings: list[Finding] = []
+    label = "Page Speed (Google PageSpeed Insights)"
+
+    if not PAGESPEED_API_KEY:
+        findings.append(Finding(
+            "info", "PageSpeed-Check nicht konfiguriert",
+            "Für diesen Check ist kein Google-PageSpeed-API-Key hinterlegt – wird übersprungen (kein bestätigtes Problem).",
+        ))
+        return CategoryResult("page_speed", label, 100, findings)
+
+    resp = await fetch(
+        client, PAGESPEED_API_URL,
+        params={"url": base_url, "key": PAGESPEED_API_KEY, "strategy": "mobile", "category": "performance"},
+        timeout=PAGESPEED_TIMEOUT,
+    )
+
+    if isinstance(resp, Exception) or resp.status_code >= 400:
+        detail = str(resp) if isinstance(resp, Exception) else f"HTTP {resp.status_code}: {resp.text[:200]}"
+        findings.append(Finding(
+            "info", "PageSpeed-Check nicht möglich",
+            f"Google PageSpeed Insights konnte nicht abgefragt werden ({detail}) – kein bestätigtes Problem, nur eine technische Einschränkung des Checks.",
+        ))
+        return CategoryResult("page_speed", label, 100, findings)
+
+    try:
+        data = resp.json()
+        lighthouse = data["lighthouseResult"]
+        perf_score = round(lighthouse["categories"]["performance"]["score"] * 100)
+        audits = lighthouse["audits"]
+        lcp_s = audits["largest-contentful-paint"]["numericValue"] / 1000
+        cls = audits["cumulative-layout-shift"]["numericValue"]
+        tbt_ms = audits["total-blocking-time"]["numericValue"]
+    except (KeyError, TypeError, ValueError) as exc:
+        findings.append(Finding(
+            "info", "PageSpeed-Ergebnis nicht auswertbar",
+            f"Antwort von Google PageSpeed Insights konnte nicht gelesen werden ({exc}).",
+        ))
+        return CategoryResult("page_speed", label, 100, findings)
+
+    # Der Lighthouse-Performance-Score ist bereits eine gewichtete
+    # Zusammenfassung von LCP/CLS/TBT & Co. – wird 1:1 als Kategorie-Score
+    # übernommen. Die einzelnen Core-Web-Vitals-Werte darunter sind rein
+    # informativ und ändern den Score nicht zusätzlich (sonst würde derselbe
+    # Effekt doppelt gewichtet).
+    score = perf_score
+
+    if perf_score >= 90:
+        findings.append(Finding("info", f"Performance-Score (mobil): {perf_score}/100",
+                                 "Google Lighthouse stuft die Ladegeschwindigkeit als gut ein."))
+    elif perf_score >= 50:
+        findings.append(Finding("medium", f"Performance-Score (mobil): {perf_score}/100",
+                                 "Google Lighthouse stuft die Ladegeschwindigkeit als verbesserungswürdig ein – eine langsame Seite verschlechtert Nutzererfahrung und Conversion."))
+    else:
+        findings.append(Finding("high", f"Performance-Score (mobil): {perf_score}/100",
+                                 "Google Lighthouse stuft die Ladegeschwindigkeit als schlecht ein."))
+
+    if lcp_s <= 2.5:
+        findings.append(Finding("info", f"Largest Contentful Paint: {lcp_s:.1f}s",
+                                 "Innerhalb des von Google empfohlenen Bereichs (≤2,5s)."))
+    elif lcp_s <= 4.0:
+        findings.append(Finding("medium", f"Largest Contentful Paint: {lcp_s:.1f}s",
+                                 "Über dem empfohlenen Wert von 2,5s – bei den Core Web Vitals als 'verbesserungswürdig' eingestuft."))
+    else:
+        findings.append(Finding("high", f"Largest Contentful Paint: {lcp_s:.1f}s",
+                                 "Deutlich über dem empfohlenen Wert von 2,5s – bei den Core Web Vitals als 'schlecht' eingestuft."))
+
+    if cls <= 0.1:
+        findings.append(Finding("info", f"Cumulative Layout Shift: {cls:.2f}",
+                                 "Innerhalb des von Google empfohlenen Bereichs (≤0,1)."))
+    elif cls <= 0.25:
+        findings.append(Finding("medium", f"Cumulative Layout Shift: {cls:.2f}",
+                                 "Über dem empfohlenen Wert von 0,1 – die Seite \"springt\" beim Laden spürbar."))
+    else:
+        findings.append(Finding("high", f"Cumulative Layout Shift: {cls:.2f}",
+                                 "Deutlich über dem empfohlenen Wert – bei den Core Web Vitals als 'schlecht' eingestuft."))
+
+    if tbt_ms <= 200:
+        findings.append(Finding("info", f"Total Blocking Time: {tbt_ms:.0f}ms",
+                                 "Innerhalb des von Google empfohlenen Bereichs."))
+    elif tbt_ms <= 600:
+        findings.append(Finding("medium", f"Total Blocking Time: {tbt_ms:.0f}ms",
+                                 "Über dem empfohlenen Wert – die Seite reagiert während des Ladens spürbar verzögert auf Eingaben."))
+    else:
+        findings.append(Finding("high", f"Total Blocking Time: {tbt_ms:.0f}ms",
+                                 "Deutlich über dem empfohlenen Wert – spürbar verzögerte Reaktion auf Eingaben während des Ladens."))
+
+    score = max(0, min(100, score))
+    return CategoryResult("page_speed", label, score, findings)
+
+
+# ---------------------------------------------------------------------------
 # Produktseiten laden (für Bewertungs- und Urgency-Checks brauchen wir das
 # tatsächlich gerenderte HTML, nicht nur products.json)
 # ---------------------------------------------------------------------------
@@ -1028,9 +1131,10 @@ async def run_scan(raw_url: str) -> dict:
         links_task = check_broken_links(client, base_url, homepage_html, site_urls)
         policy_task = check_policy_pages(client, base_url, homepage_html)
         feed_task = check_product_feed(client, base_url, homepage_html)
+        speed_task = check_page_speed(client, base_url)
 
-        trust_res, links_res, (policy_res, policy_urls), (feed_res, products_sample) = await asyncio.gather(
-            trust_task, links_task, policy_task, feed_task
+        trust_res, links_res, (policy_res, policy_urls), (feed_res, products_sample), speed_res = await asyncio.gather(
+            trust_task, links_task, policy_task, feed_task, speed_task
         )
         images_res = await check_images(client, base_url, products_sample)
         contact_res = await check_contact_legal(client, base_url, homepage_html, policy_urls)
@@ -1039,17 +1143,18 @@ async def run_scan(raw_url: str) -> dict:
         reviews_res = await check_reviews(homepage_html, product_pages)
         urgency_res = await check_urgency_patterns(product_pages, products_sample)
 
-    categories = [trust_res, links_res, policy_res, contact_res, feed_res, images_res, reviews_res, urgency_res]
+    categories = [trust_res, links_res, policy_res, contact_res, feed_res, images_res, reviews_res, urgency_res, speed_res]
 
     weights = {
-        "trust": 0.12,
-        "broken_links": 0.13,
-        "policy_pages": 0.17,
-        "contact_legal": 0.13,
-        "product_feed": 0.17,
+        "trust": 0.10,
+        "broken_links": 0.12,
+        "policy_pages": 0.15,
+        "contact_legal": 0.12,
+        "product_feed": 0.15,
         "images": 0.08,
-        "reviews": 0.10,
-        "urgency": 0.10,
+        "reviews": 0.09,
+        "urgency": 0.09,
+        "page_speed": 0.10,
     }
     overall = round(sum(c.score * weights[c.key] for c in categories))
 
