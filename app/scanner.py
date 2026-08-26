@@ -15,7 +15,7 @@ soweit ohne GMC-Login automatisiert prüfbar):
 6. Bild-Compliance (Auflösung, Alt-Text, erreichbar)
 7. Bewertungen & Social Proof (verifizierbare Plattform vs. nicht nachprüfbare/duplizierte Reviews)
 8. Künstliche Dringlichkeit/Verknappung ("Fake Urgency": Countdown-Apps, "nur noch X"-Behauptungen ohne echten Lagerbestand)
-9. Page Speed (Google PageSpeed Insights/Lighthouse: Performance-Score, LCP, CLS, TBT – mobil)
+9. Page Speed (eigene Messung: Ladezeit + HTML-Größe der Startseite, ohne externe API)
 
 Kein Login nötig, keine Datenspeicherung – alles läuft pro Request live.
 """
@@ -26,6 +26,7 @@ import asyncio
 import re
 import socket
 import ssl
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from io import BytesIO
@@ -34,8 +35,6 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
-
-from app.config import PAGESPEED_API_KEY
 
 try:
     import whois as pywhois
@@ -873,100 +872,67 @@ async def check_images(client: httpx.AsyncClient, base_url: str, products_sample
 
 
 # ---------------------------------------------------------------------------
-# 9) Page Speed (Google PageSpeed Insights / Lighthouse)
+# 9) Page Speed (eigene Messung, ohne externe API/Key)
 # ---------------------------------------------------------------------------
-PAGESPEED_API_URL = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
-# Lighthouse läuft serverseitig bei Google einen vollen Audit-Durchlauf – das
-# dauert deutlich länger als ein normaler HTTP-Request.
-PAGESPEED_TIMEOUT = httpx.Timeout(45.0, connect=10.0)
+GOOD_LOAD_TIME_S = 1.5
+OK_LOAD_TIME_S = 3.0
+GOOD_HTML_SIZE_KB = 300
+OK_HTML_SIZE_KB = 800
 
 
 async def check_page_speed(client: httpx.AsyncClient, base_url: str) -> CategoryResult:
     findings: list[Finding] = []
-    label = "Page Speed (Google PageSpeed Insights)"
+    label = "Page Speed"
 
-    if not PAGESPEED_API_KEY:
-        findings.append(Finding(
-            "info", "PageSpeed-Check nicht konfiguriert",
-            "Für diesen Check ist kein Google-PageSpeed-API-Key hinterlegt – wird übersprungen (kein bestätigtes Problem).",
-        ))
-        return CategoryResult("page_speed", label, 100, findings)
-
-    resp = await fetch(
-        client, PAGESPEED_API_URL,
-        params={"url": base_url, "key": PAGESPEED_API_KEY, "strategy": "mobile", "category": "performance"},
-        timeout=PAGESPEED_TIMEOUT,
-    )
+    started = time.monotonic()
+    resp = await fetch(client, base_url, timeout=httpx.Timeout(20.0, connect=8.0))
+    load_time_s = time.monotonic() - started
 
     if isinstance(resp, Exception) or resp.status_code >= 400:
-        detail = str(resp) if isinstance(resp, Exception) else f"HTTP {resp.status_code}: {resp.text[:200]}"
         findings.append(Finding(
-            "info", "PageSpeed-Check nicht möglich",
-            f"Google PageSpeed Insights konnte nicht abgefragt werden ({detail}) – kein bestätigtes Problem, nur eine technische Einschränkung des Checks.",
+            "info", "Page-Speed-Check nicht möglich",
+            "Startseite konnte für die Ladezeitmessung nicht abgerufen werden – kein bestätigtes Problem, nur eine technische Einschränkung des Checks.",
         ))
         return CategoryResult("page_speed", label, 100, findings)
 
-    try:
-        data = resp.json()
-        lighthouse = data["lighthouseResult"]
-        perf_score = round(lighthouse["categories"]["performance"]["score"] * 100)
-        audits = lighthouse["audits"]
-        lcp_s = audits["largest-contentful-paint"]["numericValue"] / 1000
-        cls = audits["cumulative-layout-shift"]["numericValue"]
-        tbt_ms = audits["total-blocking-time"]["numericValue"]
-    except (KeyError, TypeError, ValueError) as exc:
+    html_kb = len(resp.content) / 1024
+    score = 100
+
+    if load_time_s <= GOOD_LOAD_TIME_S:
+        findings.append(Finding("info", f"Ladezeit Startseite: {load_time_s:.2f}s",
+                                 "Schnell – innerhalb eines guten Bereichs."))
+    elif load_time_s <= OK_LOAD_TIME_S:
         findings.append(Finding(
-            "info", "PageSpeed-Ergebnis nicht auswertbar",
-            f"Antwort von Google PageSpeed Insights konnte nicht gelesen werden ({exc}).",
+            "medium", f"Ladezeit Startseite: {load_time_s:.2f}s",
+            "Spürbar langsam – eine langsame Seite verschlechtert Nutzererfahrung und Conversion.",
         ))
-        return CategoryResult("page_speed", label, 100, findings)
-
-    # Der Lighthouse-Performance-Score ist bereits eine gewichtete
-    # Zusammenfassung von LCP/CLS/TBT & Co. – wird 1:1 als Kategorie-Score
-    # übernommen. Die einzelnen Core-Web-Vitals-Werte darunter sind rein
-    # informativ und ändern den Score nicht zusätzlich (sonst würde derselbe
-    # Effekt doppelt gewichtet).
-    score = perf_score
-
-    if perf_score >= 90:
-        findings.append(Finding("info", f"Performance-Score (mobil): {perf_score}/100",
-                                 "Google Lighthouse stuft die Ladegeschwindigkeit als gut ein."))
-    elif perf_score >= 50:
-        findings.append(Finding("medium", f"Performance-Score (mobil): {perf_score}/100",
-                                 "Google Lighthouse stuft die Ladegeschwindigkeit als verbesserungswürdig ein – eine langsame Seite verschlechtert Nutzererfahrung und Conversion."))
+        score -= 20
     else:
-        findings.append(Finding("high", f"Performance-Score (mobil): {perf_score}/100",
-                                 "Google Lighthouse stuft die Ladegeschwindigkeit als schlecht ein."))
+        findings.append(Finding(
+            "high", f"Ladezeit Startseite: {load_time_s:.2f}s",
+            "Sehr langsam. Nutzer springen bei Ladezeiten über 3 Sekunden überdurchschnittlich häufig ab.",
+        ))
+        score -= 35
 
-    if lcp_s <= 2.5:
-        findings.append(Finding("info", f"Largest Contentful Paint: {lcp_s:.1f}s",
-                                 "Innerhalb des von Google empfohlenen Bereichs (≤2,5s)."))
-    elif lcp_s <= 4.0:
-        findings.append(Finding("medium", f"Largest Contentful Paint: {lcp_s:.1f}s",
-                                 "Über dem empfohlenen Wert von 2,5s – bei den Core Web Vitals als 'verbesserungswürdig' eingestuft."))
+    if html_kb <= GOOD_HTML_SIZE_KB:
+        findings.append(Finding("info", f"HTML-Größe Startseite: {html_kb:.0f} KB", "Kompakt."))
+    elif html_kb <= OK_HTML_SIZE_KB:
+        findings.append(Finding(
+            "low", f"HTML-Größe Startseite: {html_kb:.0f} KB",
+            "Etwas groß – kann auf langsamen Verbindungen spürbar sein.",
+        ))
+        score -= 5
     else:
-        findings.append(Finding("high", f"Largest Contentful Paint: {lcp_s:.1f}s",
-                                 "Deutlich über dem empfohlenen Wert von 2,5s – bei den Core Web Vitals als 'schlecht' eingestuft."))
+        findings.append(Finding(
+            "medium", f"HTML-Größe Startseite: {html_kb:.0f} KB",
+            "Sehr groß für reines HTML – ggf. prüfen, ob unnötig viel Inline-Code/Markup mitgeliefert wird.",
+        ))
+        score -= 10
 
-    if cls <= 0.1:
-        findings.append(Finding("info", f"Cumulative Layout Shift: {cls:.2f}",
-                                 "Innerhalb des von Google empfohlenen Bereichs (≤0,1)."))
-    elif cls <= 0.25:
-        findings.append(Finding("medium", f"Cumulative Layout Shift: {cls:.2f}",
-                                 "Über dem empfohlenen Wert von 0,1 – die Seite \"springt\" beim Laden spürbar."))
-    else:
-        findings.append(Finding("high", f"Cumulative Layout Shift: {cls:.2f}",
-                                 "Deutlich über dem empfohlenen Wert – bei den Core Web Vitals als 'schlecht' eingestuft."))
-
-    if tbt_ms <= 200:
-        findings.append(Finding("info", f"Total Blocking Time: {tbt_ms:.0f}ms",
-                                 "Innerhalb des von Google empfohlenen Bereichs."))
-    elif tbt_ms <= 600:
-        findings.append(Finding("medium", f"Total Blocking Time: {tbt_ms:.0f}ms",
-                                 "Über dem empfohlenen Wert – die Seite reagiert während des Ladens spürbar verzögert auf Eingaben."))
-    else:
-        findings.append(Finding("high", f"Total Blocking Time: {tbt_ms:.0f}ms",
-                                 "Deutlich über dem empfohlenen Wert – spürbar verzögerte Reaktion auf Eingaben während des Ladens."))
+    findings.append(Finding(
+        "info", "Hinweis zur Messmethode",
+        "Basiert auf einem einzelnen Server-Request unserer Scan-Engine (Ladezeit + reine HTML-Größe), nicht auf einer echten Lighthouse-Analyse im Browser (kein LCP/CLS/JS-Rendering enthalten). Für eine vollständige Web-Vitals-Analyse: pagespeed.web.dev.",
+    ))
 
     score = max(0, min(100, score))
     return CategoryResult("page_speed", label, score, findings)

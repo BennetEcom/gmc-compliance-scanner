@@ -18,7 +18,7 @@ Kategorien A-H davon, soweit ohne GMC-Login automatisiert prüfbar).
 6. **Bild-Compliance** – prüft, ob Produktbilder erreichbar sind und die von Google empfohlene Mindestauflösung erfüllen
 7. **Bewertungen & Social Proof** – erkennt bekannte Bewertungsplattformen (Trustpilot, Judge.me, Loox, Yotpo, …); fehlt eine solche trotz angezeigter Sternebewertungen, oder tauchen identische Rezensionstexte auf mehreren Produktseiten auf, wird das als nicht verifizierbar/möglich gefälscht markiert
 8. **Künstliche Dringlichkeit ("Fake Urgency")** – sucht nach Countdown-/Verknappungs-Apps und Formulierungen wie "nur noch X auf Lager"; wenn Shopify für die geprüften Produkte gar keinen Lagerbestand trackt, können solche Angaben nicht real sein (Verstoß gegen Googles Misrepresentation-Richtlinie)
-9. **Page Speed** – fragt Googles offizielle **PageSpeed Insights API** (Lighthouse, mobil) ab: Performance-Score, Largest Contentful Paint, Cumulative Layout Shift, Total Blocking Time. Braucht einen kostenlosen Google-API-Key (siehe unten), sonst wird der Check übersprungen (grün, kein Punktabzug)
+9. **Page Speed** – misst Ladezeit und HTML-Größe der Startseite direkt beim Scan (kein externer API-Key nötig). Liefert keine echten Lighthouse-Werte wie LCP/CLS, aber eine grobe, sofort verfügbare Einschätzung der Ladegeschwindigkeit
 
 Alles läuft live pro Anfrage, es werden keine Scan-Ergebnisse dauerhaft
 gespeichert (nur ein kurzlebiger In-Memory-Cache pro Zahlungs-Session, damit
@@ -61,20 +61,6 @@ Der Score ist eine fundierte Risiko-Einschätzung, keine Garantie.
 Ohne gesetzte Stripe-Keys läuft die App automatisch im **Testmodus**: jeder
 Scan wird direkt ausgeführt, ohne Bezahlung, mit einem gelben Hinweisbanner.
 So kannst du lokal alles durchklicken, ohne echtes Geld zu bewegen.
-
-### Page-Speed-Check einrichten (optional, aber empfohlen)
-
-1. Auf https://console.cloud.google.com ein (kostenloses) Projekt anlegen
-   oder ein bestehendes nutzen.
-2. **APIs & Services → Library** → nach "PageSpeed Insights API" suchen →
-   **Enable**.
-3. **APIs & Services → Credentials → + Create Credentials → API Key**.
-4. Den Key als `PAGESPEED_API_KEY` in `.env` (lokal) bzw. unter Render →
-   **Environment** eintragen. Kein Billing/Kreditkarte nötig, das kostenlose
-   Kontingent reicht für einen Compliance-Scanner locker aus.
-
-Ohne diesen Key wird die Kategorie "Page Speed" einfach übersprungen (grüner,
-neutraler Hinweis statt Fehler) – der Rest des Scans läuft normal weiter.
 
 ## Lokal starten
 
