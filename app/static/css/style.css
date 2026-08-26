@@ -525,14 +525,25 @@ h1 {
   .hero-visual { margin-top: 40px; }
   .scorecard-preview { transform: none; }
 
+  /* Stat-Zeile (73% / 8 / Alle) auf Mobile als saubere, zentrierte Spalte
+     statt schiefem 2+1-Umbruch durch flex-wrap. */
+  .stat-row.centered { flex-direction: column; align-items: center; gap: 22px; margin-top: 32px; }
+  .stat-label { max-width: 260px; text-align: center; }
+
   .section-head { padding: 48px 0 8px; }
   .section-head h2, .section-title { font-size: 24px; }
   /* .features sitzt bereits in .container (24px Padding) - eigenes
      Padding würde das verdoppeln, deshalb hier auf 0 zurücksetzen. */
   .features { padding-left: 0; padding-right: 0; padding-top: 8px; padding-bottom: 56px; }
 
-  .how { padding-top: 48px; padding-bottom: 56px; }
-  .why { padding-top: 48px; padding-bottom: 56px; }
+  .how { padding-top: 40px; padding-bottom: 44px; }
+  /* Schritte enger zusammenrücken statt viel Leerraum zwischen jedem Kreis. */
+  .how-steps { margin-top: 24px; gap: 16px; }
+  .how-step { max-width: 300px; }
+  .how-circle { width: 42px; height: 42px; font-size: 16px; margin-bottom: 10px; }
+  .how-step h3 { margin-bottom: 4px; }
+
+  .why { padding-top: 40px; padding-bottom: 44px; }
 
   .final-cta-panel { padding: 40px 20px; }
   .final-cta-panel h2 { font-size: 24px; }
