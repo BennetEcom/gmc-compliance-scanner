@@ -266,9 +266,8 @@ async def check_trust_domain(client: httpx.AsyncClient, base_url: str) -> Catego
                                  f"Die Startseite konnte nicht geladen werden ({resp})."))
         score -= 60
     elif resp.status_code == 403:
-        findings.append(Finding("medium", "Zugriff durch Bot-Schutz blockiert (403)",
+        findings.append(Finding("info", "Zugriff durch Bot-Schutz blockiert (403)",
                                  "Der Shop hat eine Firewall/Bot-Schutz aktiv, die automatisierte Anfragen blockiert. Das ist kein GMC-Compliance-Problem, verhindert aber weitere automatische Checks auf dieser Seite – bitte einzelne Bereiche manuell prüfen."))
-        score -= 15
     elif resp.status_code >= 400:
         findings.append(Finding("critical", "Shop nicht erreichbar",
                                  f"Die Startseite antwortet mit Fehlercode {resp.status_code}."))
@@ -297,8 +296,7 @@ async def check_trust_domain(client: httpx.AsyncClient, base_url: str) -> Catego
         else:
             findings.append(Finding("info", "SSL-Zertifikat gültig", f"Noch {days_left} Tage gültig."))
     except Exception as exc:  # noqa: BLE001
-        findings.append(Finding("medium", "SSL-Zertifikat konnte nicht geprüft werden", str(exc)))
-        score -= 10
+        findings.append(Finding("info", "SSL-Zertifikat konnte nicht geprüft werden", "Technische Prüfung war nicht möglich – kein bestätigtes Problem: " + str(exc)))
 
     # Domain-Alter via WHOIS
     domain_age_days: Optional[int] = None
@@ -316,7 +314,7 @@ async def check_trust_domain(client: httpx.AsyncClient, base_url: str) -> Catego
             domain_age_days = None
 
     if domain_age_days is None:
-        findings.append(Finding("low", "Domain-Alter unbekannt", "WHOIS-Daten waren nicht auslesbar (kein Rot-Flag, aber auch kein Vertrauensbonus)."))
+        findings.append(Finding("info", "Domain-Alter unbekannt", "WHOIS-Daten waren nicht auslesbar (kein Rot-Flag, aber auch kein Vertrauensbonus)."))
     elif domain_age_days < MIN_TRUSTED_DOMAIN_AGE_DAYS:
         findings.append(Finding("high", "Sehr junge Domain",
                                  f"Domain ist erst {domain_age_days} Tage alt. Junge Domains werden von GMC häufiger streng geprüft ('73% der neuen Dropshipping-Stores scheitern an mind. einem Check')."))
@@ -409,8 +407,8 @@ async def check_broken_links(client: httpx.AsyncClient, base_url: str, homepage_
     score = 100
 
     if not homepage_html:
-        findings.append(Finding("medium", "Broken-Link-Check nicht möglich", "Startseite konnte nicht geladen werden."))
-        return CategoryResult("broken_links", "Broken Links", 40, findings)
+        findings.append(Finding("info", "Broken-Link-Check nicht möglich", "Startseite konnte nicht geladen werden – kein bestätigtes Problem, nur eine technische Einschränkung des Checks."))
+        return CategoryResult("broken_links", "Broken Links", 100, findings)
 
     links = list(site_urls.get("all", []))
     total_discovered = site_urls.get("total_discovered", len(links))
@@ -484,15 +482,12 @@ async def check_broken_links(client: httpx.AsyncClient, base_url: str, homepage_
             if len(other_errors) > len(shown):
                 preview += f"\n… und {len(other_errors) - len(shown)} weitere"
             findings.append(Finding(
-                "low", f"{len(other_errors)} von {len(links)} Seiten mit anderem Fehlerstatus, kein 404 (nicht als Broken Link gewertet){coverage_note}",
-                f"Statuscodes wie 403/429/5xx oder Timeouts bedeuten nicht \"Seite existiert nicht\", sondern meist Firewall-/Rate-Limit-Reaktionen auf den Scan selbst – deshalb hier separat und nicht in der Broken-Link-Zahl:\n{preview}",
+                "info", f"{len(other_errors)} von {len(links)} Seiten mit anderem Fehlerstatus, kein 404 (nicht als Broken Link gewertet){coverage_note}",
+                f"Statuscodes wie 403/429/5xx oder Timeouts bedeuten nicht \"Seite existiert nicht\", sondern meist Firewall-/Rate-Limit-Reaktionen auf den Scan selbst – kein bestätigtes Problem, deshalb hier separat und ohne Punktabzug:\n{preview}",
             ))
-            # Nur ein kleiner Abzug: unklarer Status ist ein Unsicherheitsfaktor,
-            # kein bestätigter Broken Link.
-            score -= min(10, round(5 * len(other_errors) / len(links)))
     else:
-        findings.append(Finding("low", "Keine internen Links gefunden", "Es konnten keine prüfbaren internen Seiten gefunden werden."))
-        score = 70
+        findings.append(Finding("info", "Keine internen Links gefunden", "Es konnten keine prüfbaren internen Seiten gefunden werden – kein bestätigtes Problem, nur eine technische Einschränkung des Checks."))
+        score = 100
 
     return CategoryResult("broken_links", "Broken Links", max(0, min(100, score)), findings)
 
@@ -576,8 +571,8 @@ async def check_contact_legal(client: httpx.AsyncClient, base_url: str, homepage
 
     combined_html = "\n".join(pages_html.values())
     if not combined_html.strip():
-        findings.append(Finding("low", "Kontakt-Check nicht möglich", "Keine Seiteninhalte zum Analysieren geladen."))
-        return CategoryResult("contact_legal", "Kontakt & Rechtliches", 60, findings)
+        findings.append(Finding("info", "Kontakt-Check nicht möglich", "Keine Seiteninhalte zum Analysieren geladen – kein bestätigtes Problem, nur eine technische Einschränkung des Checks."))
+        return CategoryResult("contact_legal", "Kontakt & Rechtliches", 100, findings)
 
     # 1) Geschäftliche E-Mail statt privatem Anbieter
     emails_by_page = {url: set(EMAIL_RE.findall(html)) for url, html in pages_html.items()}
@@ -701,20 +696,20 @@ async def check_product_feed(client: httpx.AsyncClient, base_url: str, homepage_
 
     resp = await fetch(client, urljoin(base_url, "/products.json?limit=" + str(MAX_PRODUCTS_TO_SAMPLE)))
     if isinstance(resp, Exception) or resp.status_code >= 400:
-        findings.append(Finding("low", "Kein Shopify products.json-Feed gefunden",
-                                 "Store scheint nicht auf Shopify zu laufen oder der Feed ist deaktiviert – Feed-Qualität kann nicht automatisch geprüft werden."))
-        return CategoryResult("product_feed", "Produkt-Feed-Qualität", 60, findings), products_sample
+        findings.append(Finding("info", "Kein Shopify products.json-Feed gefunden",
+                                 "Store scheint nicht auf Shopify zu laufen oder der Feed ist deaktiviert – Feed-Qualität kann nicht automatisch geprüft werden. Kein bestätigtes Problem."))
+        return CategoryResult("product_feed", "Produkt-Feed-Qualität", 100, findings), products_sample
 
     try:
         data = resp.json()
         products = data.get("products", [])[:MAX_PRODUCTS_TO_SAMPLE]
     except Exception:
-        findings.append(Finding("low", "Produkt-Feed nicht auswertbar", "products.json konnte nicht als JSON gelesen werden."))
-        return CategoryResult("product_feed", "Produkt-Feed-Qualität", 60, findings), products_sample
+        findings.append(Finding("info", "Produkt-Feed nicht auswertbar", "products.json konnte nicht als JSON gelesen werden – kein bestätigtes Problem, nur eine technische Einschränkung des Checks."))
+        return CategoryResult("product_feed", "Produkt-Feed-Qualität", 100, findings), products_sample
 
     if not products:
-        findings.append(Finding("medium", "Keine Produkte im Feed gefunden", "Store hat aktuell keine sichtbaren Produkte über products.json."))
-        return CategoryResult("product_feed", "Produkt-Feed-Qualität", 50, findings), products_sample
+        findings.append(Finding("info", "Keine Produkte im Feed gefunden", "Store hat aktuell keine sichtbaren Produkte über products.json – kein bestätigtes Problem, nur eine technische Einschränkung des Checks."))
+        return CategoryResult("product_feed", "Produkt-Feed-Qualität", 100, findings), products_sample
 
     missing_brand = 0
     missing_gtin = 0
@@ -833,8 +828,8 @@ async def check_images(client: httpx.AsyncClient, base_url: str, products_sample
     image_urls = image_urls[:50]
 
     if not image_urls:
-        findings.append(Finding("low", "Keine Produktbilder zum Prüfen gefunden", "Bild-Compliance konnte nicht automatisch bewertet werden."))
-        return CategoryResult("images", "Bild-Compliance", 60, findings)
+        findings.append(Finding("info", "Keine Produktbilder zum Prüfen gefunden", "Bild-Compliance konnte nicht automatisch bewertet werden – kein bestätigtes Problem, nur eine technische Einschränkung des Checks."))
+        return CategoryResult("images", "Bild-Compliance", 100, findings)
 
     broken = 0
     too_small = 0
@@ -909,8 +904,8 @@ async def check_reviews(homepage_html: Optional[str], product_pages: list[tuple[
 
     all_html = (homepage_html or "") + "".join(html for _, html in product_pages)
     if not all_html.strip():
-        findings.append(Finding("low", "Bewertungen konnten nicht geprüft werden", "Keine Seiteninhalte zum Analysieren geladen."))
-        return CategoryResult("reviews", "Bewertungen & Social Proof", 60, findings)
+        findings.append(Finding("info", "Bewertungen konnten nicht geprüft werden", "Keine Seiteninhalte zum Analysieren geladen – kein bestätigtes Problem, nur eine technische Einschränkung des Checks."))
+        return CategoryResult("reviews", "Bewertungen & Social Proof", 100, findings)
 
     lower_html = all_html.lower()
     detected_platforms = sorted({name for sig, name in KNOWN_REVIEW_PLATFORMS.items() if sig in lower_html})
@@ -928,8 +923,7 @@ async def check_reviews(homepage_html: Optional[str], product_pages: list[tuple[
         ))
         score -= 35
     else:
-        findings.append(Finding("info", "Keine Bewertungen auf der Seite gefunden", "Weder Rating-Claims noch eine Bewertungsplattform erkannt – kein Rot-Flag, aber auch kein Vertrauenssignal."))
-        score -= 5
+        findings.append(Finding("info", "Keine Bewertungen auf der Seite gefunden", "Weder Rating-Claims noch eine Bewertungsplattform erkannt – kein bestätigtes Problem."))
 
     # Identische Review-Texte über mehrere Produktseiten hinweg = klassisches
     # Fake-Review-Muster (kopierte Templates statt echter Kundenstimmen).
@@ -965,8 +959,8 @@ async def check_urgency_patterns(product_pages: list[tuple[str, str]], products_
     score = 100
 
     if not product_pages:
-        findings.append(Finding("low", "Urgency-Check nicht möglich", "Keine Produktseiten zum Analysieren geladen."))
-        return CategoryResult("urgency", "Künstliche Dringlichkeit", 70, findings)
+        findings.append(Finding("info", "Urgency-Check nicht möglich", "Keine Produktseiten zum Analysieren geladen – kein bestätigtes Problem, nur eine technische Einschränkung des Checks."))
+        return CategoryResult("urgency", "Künstliche Dringlichkeit", 100, findings)
 
     text_hits: set[str] = set()
     app_hits: set[str] = set()
