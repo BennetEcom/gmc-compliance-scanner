@@ -513,3 +513,29 @@ h1 {
 
 .footer { border-top: 1px solid var(--border); padding: 28px 0; color: var(--text-dim); font-size: 13px; text-align: center; }
 .footer-credit { margin: 6px 0 0; opacity: 0.7; }
+
+/* Mobile optimizations */
+@media (max-width: 640px) {
+  .hero-centered { padding-top: 48px; padding-bottom: 32px; }
+  h1 { font-size: 34px; }
+
+  .input-row { flex-direction: column; }
+  #scan-btn { width: 100%; }
+
+  .hero-visual { margin-top: 40px; }
+  .scorecard-preview { transform: none; }
+
+  .section-head { padding: 48px 0 8px; }
+  .section-head h2, .section-title { font-size: 24px; }
+  /* .features sitzt bereits in .container (24px Padding) - eigenes
+     Padding würde das verdoppeln, deshalb hier auf 0 zurücksetzen. */
+  .features { padding-left: 0; padding-right: 0; padding-top: 8px; padding-bottom: 56px; }
+
+  .how { padding-top: 48px; padding-bottom: 56px; }
+  .why { padding-top: 48px; padding-bottom: 56px; }
+
+  .final-cta-panel { padding: 40px 20px; }
+  .final-cta-panel h2 { font-size: 24px; }
+
+  .report-header { padding: 24px 18px; }
+}
