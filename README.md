@@ -2,8 +2,9 @@
 
 Landingpage + echter, live laufender Scanner, der einen Shopify-Store (oder
 generisch jede Website) gegen die wichtigsten Google-Merchant-Center-Regeln
-prüft. Aktuell komplett kostenlos (Stripe-Zahlung ist im Code vorbereitet,
-aber deaktiviert, solange keine Stripe-Keys gesetzt sind).
+prüft. Der erste Scan pro Store-Domain ist kostenlos, jeder weitere Scan
+derselben Domain kostet (Stripe Checkout). Ohne gesetzte Stripe-Keys läuft
+der Scanner komplett kostenlos (Testmodus).
 
 Die Checks sind gegen die interne "GMC Master Checklist" abgeglichen (die
 Kategorien A-H davon, soweit ohne GMC-Login automatisiert prüfbar).
@@ -31,6 +32,12 @@ Der Score ist eine fundierte Risiko-Einschätzung, keine Garantie.
 
 ## Bezahlung & Promo-Code
 
+- **Erster Scan pro Domain gratis:** Wurde eine Store-Domain noch nie gescannt,
+  läuft der Scan direkt und kostenlos, mit einem Hinweisbanner im Report.
+  Erst der zweite Scan derselben Domain (egal von wem) verlangt Bezahlung.
+  Die Zuordnung läuft rein über den In-Memory-Zähler des Servers (kein
+  Cookie/Login beim Besucher nötig) – setzt sich bei jedem Deploy/Neustart
+  zurück.
 - Checkout läuft über **Stripe Checkout** (einmaliger Kauf, 10&nbsp;€).
 - `allow_promotion_codes=True` ist aktiviert → jeder Nutzer kann im
   Stripe-Checkout ein Rabattcode-Feld sehen und einlösen.

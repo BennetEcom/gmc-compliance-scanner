@@ -99,7 +99,16 @@ async def api_start_scan(payload: StartScanRequest):
         _stats["scanned_domains"].append(normalized)
         return {"mode": "direct", "result": result}
 
-    # 3) Normalfall: Stripe Checkout Session (10 EUR, Promo-Code-Feld aktiv)
+    # 3) Diese Domain wurde noch nie gescannt -> erster Scan ist gratis
+    if normalized not in _stats["scanned_domains"]:
+        result = await run_scan(normalized)
+        result["_notice"] = "Der erste Scan für diesen Store ist kostenlos. Ein erneuter Scan kostet " \
+                             f"{SCAN_PRICE_EUR:.2f} €."
+        _stats["scans_completed"] += 1
+        _stats["scanned_domains"].append(normalized)
+        return {"mode": "direct", "result": result}
+
+    # 4) Domain wurde bereits gescannt -> Stripe Checkout Session (10 EUR, Promo-Code-Feld aktiv)
     session = create_checkout_session(normalized)
     return {"mode": "redirect", **session}
 
@@ -129,6 +138,8 @@ async def api_scan_result(session_id: str):
 
     result = await run_scan(store_url)
     cache_result(session_id, result)
+    _stats["scans_completed"] += 1
+    _stats["scanned_domains"].append(store_url)
     return result
 
 
