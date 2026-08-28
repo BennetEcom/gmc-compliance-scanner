@@ -198,6 +198,13 @@ h1 {
   font-size: 14px;
 }
 
+.price-note {
+  margin: 14px 0 0;
+  color: var(--text-dim);
+  font-size: 13.5px;
+}
+.price-note strong { color: var(--text); }
+
 .stat-row { display: flex; gap: 36px; margin-top: 44px; flex-wrap: wrap; }
 .stat-row.centered { justify-content: center; text-align: left; }
 .stat-num { font-size: 30px; font-weight: 800; color: var(--blue); letter-spacing: -0.01em; }
