@@ -61,7 +61,7 @@ Der Score ist eine fundierte Risiko-Einschätzung, keine Garantie.
    - `STRIPE_SECRET_KEY`
    - `STRIPE_PUBLISHABLE_KEY`
    - `STRIPE_PRICE_ID`
-   - `APP_BASE_URL` (die öffentliche URL deiner App, z.B. `https://gmcguard.onrender.com`)
+   - `APP_BASE_URL` (die öffentliche URL deiner App, z.B. `https://gmc-compliance-scanner.onrender.com`)
    - `OWNER_BYPASS_CODE` (ein selbst gewähltes Geheimnis, NICHT das gleiche wie ein Stripe-Coupon-Code)
    - `APP_SECRET` (beliebiger zufälliger String)
 
