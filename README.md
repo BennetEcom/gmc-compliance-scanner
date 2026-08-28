@@ -35,9 +35,11 @@ Der Score ist eine fundierte Risiko-Einschätzung, keine Garantie.
 - **Erster Scan pro Domain gratis:** Wurde eine Store-Domain noch nie gescannt,
   läuft der Scan direkt und kostenlos, mit einem Hinweisbanner im Report.
   Erst der zweite Scan derselben Domain (egal von wem) verlangt Bezahlung.
-  Die Zuordnung läuft rein über den In-Memory-Zähler des Servers (kein
-  Cookie/Login beim Besucher nötig) – setzt sich bei jedem Deploy/Neustart
-  zurück.
+  Die Zuordnung läuft ohne Cookie/Login beim Besucher, wird aber auf einer
+  **Render Persistent Disk** gespeichert (`STATS_FILE`, Standard
+  `/var/data/stats.json`) – sonst könnte man die Regel durch einen einfachen
+  Server-Neustart/Redeploy aushebeln. Ohne gemountete Disk (z.B. lokale
+  Entwicklung) läuft es automatisch als reiner In-Memory-Fallback weiter.
 - Checkout läuft über **Stripe Checkout** (einmaliger Kauf, 10&nbsp;€).
 - `allow_promotion_codes=True` ist aktiviert → jeder Nutzer kann im
   Stripe-Checkout ein Rabattcode-Feld sehen und einlösen.

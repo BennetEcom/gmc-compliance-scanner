@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import datetime, timezone
 
@@ -44,16 +45,47 @@ def _asset_version(*paths: str) -> str:
 
 ASSET_VERSION = _asset_version("app/static/css/style.css", "app/static/js/app.js")
 
-# Nur In-Memory-Zähler für den Betreiber (kein Tracking von Besucher:innen,
-# keine IPs/Cookies) – setzt sich bei jedem Deploy/Neustart zurück, passt zur
-# "keine Datenspeicherung"-Zusage der Seite.
-_stats = {
-    "started_at": datetime.now(timezone.utc).isoformat(),
-    "page_views": 0,
-    "scans_started": 0,
-    "scans_completed": 0,
-    "scanned_domains": [],
-}
+# Zähler + "schon gescannt"-Liste für den Betreiber (kein Tracking von
+# Besucher:innen, keine IPs/Cookies). Wird auf einer Render Persistent Disk
+# gespeichert (falls gemountet), damit die "erster Scan pro Domain gratis"-
+# Regel Deploys/Neustarts übersteht – sonst könnte man sie durch einen
+# Server-Neustart aushebeln. Ohne gemountete Disk (z.B. lokal) läuft es
+# automatisch im reinen In-Memory-Fallback weiter.
+STATS_FILE = os.getenv("STATS_FILE", "/var/data/stats.json")
+
+
+def _load_stats() -> dict:
+    try:
+        with open(STATS_FILE) as f:
+            data = json.load(f)
+        data.setdefault("started_at", datetime.now(timezone.utc).isoformat())
+        data.setdefault("page_views", 0)
+        data.setdefault("scans_started", 0)
+        data.setdefault("scans_completed", 0)
+        data.setdefault("scanned_domains", [])
+        return data
+    except (OSError, json.JSONDecodeError):
+        return {
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "page_views": 0,
+            "scans_started": 0,
+            "scans_completed": 0,
+            "scanned_domains": [],
+        }
+
+
+def _save_stats() -> None:
+    try:
+        os.makedirs(os.path.dirname(STATS_FILE), exist_ok=True)
+        tmp_path = STATS_FILE + ".tmp"
+        with open(tmp_path, "w") as f:
+            json.dump(_stats, f)
+        os.replace(tmp_path, STATS_FILE)
+    except OSError:
+        pass  # keine Disk gemountet (z.B. lokale Entwicklung) -> nur In-Memory
+
+
+_stats = _load_stats()
 
 
 class StartScanRequest(BaseModel):
@@ -89,6 +121,7 @@ async def api_start_scan(payload: StartScanRequest):
         result = await run_scan(normalized)
         _stats["scans_completed"] += 1
         _stats["scanned_domains"].append(normalized)
+        _save_stats()
         return {"mode": "direct", "result": result}
 
     # 2) Kein Stripe konfiguriert -> Scan ist aktuell kostenlos
@@ -97,6 +130,7 @@ async def api_start_scan(payload: StartScanRequest):
         result["_notice"] = "Aktuell komplett kostenlos."
         _stats["scans_completed"] += 1
         _stats["scanned_domains"].append(normalized)
+        _save_stats()
         return {"mode": "direct", "result": result}
 
     # 3) Diese Domain wurde noch nie gescannt -> erster Scan ist gratis
@@ -106,6 +140,7 @@ async def api_start_scan(payload: StartScanRequest):
                              f"{SCAN_PRICE_EUR:.2f} €."
         _stats["scans_completed"] += 1
         _stats["scanned_domains"].append(normalized)
+        _save_stats()
         return {"mode": "direct", "result": result}
 
     # 4) Domain wurde bereits gescannt -> Stripe Checkout Session (10 EUR, Promo-Code-Feld aktiv)
@@ -140,6 +175,7 @@ async def api_scan_result(session_id: str):
     cache_result(session_id, result)
     _stats["scans_completed"] += 1
     _stats["scanned_domains"].append(store_url)
+    _save_stats()
     return result
 
 
@@ -162,7 +198,7 @@ async def api_stats(code: str = ""):
         **{k: v for k, v in _stats.items() if k != "scanned_domains"},
         "unique_domains_scanned": len(set(domains)),
         "most_recent_domains": recent,
-        "note": "In-Memory-Zähler, setzt sich bei jedem Deploy/Neustart zurück.",
+        "note": "Wird auf einer Render Persistent Disk gespeichert (falls gemountet) und übersteht damit Deploys/Neustarts.",
     }
 
 
