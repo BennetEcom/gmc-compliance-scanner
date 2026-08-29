@@ -187,6 +187,10 @@ const I18N = {
   "err.package_checkout": { de: "Fehler beim Starten des Bezahlvorgangs.", en: "Error starting the checkout." },
   "btn.checking": { de: "Wird geprüft...", en: "Checking..." },
 
+  "modal.title": { de: "Für welche Domain?", en: "For which domain?" },
+  "modal.desc": { de: "Trag die Domain ein, für die du das Paket kaufen möchtest.", en: "Enter the domain you want to buy the package for." },
+  "modal.cancel": { de: "Abbrechen", en: "Cancel" },
+  "modal.confirm": { de: "Weiter zum Bezahlen", en: "Continue to payment" },
   "package.notice": {
     de: "Dein kostenloser Scan für diese Domain wurde bereits verwendet. Wähle unten ein Paket, um weiterzuscannen:",
     en: "Your free scan for this domain has already been used. Choose a package below to keep scanning:",

@@ -247,37 +247,74 @@ function showPackageNotice(storeUrl) {
   document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-document.querySelectorAll("[data-package]").forEach((pkgBtn) => {
-  pkgBtn.addEventListener("click", async () => {
-    const url = document.getElementById("store-url").value.trim();
-    if (!url) {
-      document.getElementById("hero")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      showError(tUI("err.empty_url"));
-      return;
+async function buyPackage(url, pkg, triggerBtn) {
+  const originalText = triggerBtn.textContent;
+  triggerBtn.disabled = true;
+  triggerBtn.textContent = tUI("btn.checking");
+  try {
+    const resp = await fetch("/api/buy-package", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, package: pkg, lang: getLang() }),
+    });
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({}));
+      throw new Error(data.detail || tUI("err.package_checkout"));
     }
-    const originalText = pkgBtn.textContent;
-    pkgBtn.disabled = true;
-    pkgBtn.textContent = tUI("btn.checking");
-    try {
-      const resp = await fetch("/api/buy-package", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url,
-          package: pkgBtn.getAttribute("data-package"),
-          lang: getLang(),
-        }),
-      });
-      if (!resp.ok) {
-        const data = await resp.json().catch(() => ({}));
-        throw new Error(data.detail || tUI("err.package_checkout"));
-      }
-      const data = await resp.json();
-      window.location.href = data.checkout_url;
-    } catch (e) {
-      showError(e.message || tUI("err.package_checkout"));
-      pkgBtn.disabled = false;
-      pkgBtn.textContent = originalText;
+    const data = await resp.json();
+    window.location.href = data.checkout_url;
+  } catch (e) {
+    showError(e.message || tUI("err.package_checkout"));
+    triggerBtn.disabled = false;
+    triggerBtn.textContent = originalText;
+  }
+}
+
+const packageModal = document.getElementById("package-modal");
+const modalStoreUrl = document.getElementById("modal-store-url");
+const modalError = document.getElementById("modal-error");
+const modalConfirm = document.getElementById("modal-confirm");
+const modalCancel = document.getElementById("modal-cancel");
+let pendingPackageBtn = null;
+
+function openPackageModal(pkgBtn) {
+  pendingPackageBtn = pkgBtn;
+  modalError.hidden = true;
+  modalStoreUrl.value = "";
+  packageModal.hidden = false;
+  modalStoreUrl.focus();
+}
+
+function closePackageModal() {
+  packageModal.hidden = true;
+  pendingPackageBtn = null;
+}
+
+modalCancel.addEventListener("click", closePackageModal);
+packageModal.addEventListener("click", (e) => {
+  if (e.target === packageModal) closePackageModal();
+});
+
+modalConfirm.addEventListener("click", async () => {
+  const url = modalStoreUrl.value.trim();
+  if (!url) {
+    modalError.textContent = tUI("err.empty_url");
+    modalError.hidden = false;
+    return;
+  }
+  const pkgBtn = pendingPackageBtn;
+  const pkg = pkgBtn.getAttribute("data-package");
+  closePackageModal();
+  await buyPackage(url, pkg, pkgBtn);
+});
+
+document.querySelectorAll("[data-package]").forEach((pkgBtn) => {
+  pkgBtn.addEventListener("click", () => {
+    const url = document.getElementById("store-url").value.trim();
+    if (url) {
+      buyPackage(url, pkgBtn.getAttribute("data-package"), pkgBtn);
+    } else {
+      openPackageModal(pkgBtn);
     }
   });
 });

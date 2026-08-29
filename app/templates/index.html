@@ -373,6 +373,25 @@
     </div>
   </footer>
 
+  <div id="package-modal" class="modal-overlay" hidden>
+    <div class="modal-box">
+      <h3 data-i18n="modal.title">Für welche Domain?</h3>
+      <p class="modal-desc" data-i18n="modal.desc">Trag die Domain ein, für die du das Paket kaufen möchtest.</p>
+      <input
+        id="modal-store-url"
+        type="text"
+        data-i18n-placeholder="hero.input_placeholder"
+        placeholder="deinshop.myshopify.com"
+        autocomplete="off"
+      />
+      <p id="modal-error" class="form-error" hidden></p>
+      <div class="modal-actions">
+        <button type="button" id="modal-cancel" class="modal-btn modal-btn-cancel" data-i18n="modal.cancel">Abbrechen</button>
+        <button type="button" id="modal-confirm" class="modal-btn modal-btn-confirm" data-i18n="modal.confirm">Weiter zum Bezahlen</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     window.__PENDING_SESSION_ID__ = {{ pending_session_id | tojson }};
     window.__INITIAL_LANG__ = {{ initial_lang | tojson }};
