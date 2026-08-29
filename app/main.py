@@ -1,6 +1,7 @@
 import json
 import os
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -12,11 +13,12 @@ from app.config import (
     STRIPE_PUBLISHABLE_KEY,
     OWNER_BYPASS_CODE,
     STATS_ACCESS_CODE,
-    SCAN_PRICE_EUR,
+    SCAN_PACKAGES,
 )
+from app.i18n import resolve_lang, t
 from app.payments import (
     is_stripe_configured,
-    create_checkout_session,
+    create_package_checkout_session,
     verify_paid_session,
     cache_result,
     get_cached_result,
@@ -45,12 +47,12 @@ def _asset_version(*paths: str) -> str:
 
 ASSET_VERSION = _asset_version("app/static/css/style.css", "app/static/js/app.js")
 
-# Zähler + "schon gescannt"-Liste für den Betreiber (kein Tracking von
-# Besucher:innen, keine IPs/Cookies). Wird auf einer Render Persistent Disk
-# gespeichert (falls gemountet), damit die "erster Scan pro Domain gratis"-
-# Regel Deploys/Neustarts übersteht – sonst könnte man sie durch einen
-# Server-Neustart aushebeln. Ohne gemountete Disk (z.B. lokal) läuft es
-# automatisch im reinen In-Memory-Fallback weiter.
+# Zähler + "schon gescannt"-Liste + Scan-Guthaben pro Käufer-Token (kein
+# Tracking von Besucher:innen, keine IPs/Cookies, kein Login). Wird auf einer
+# Render Persistent Disk gespeichert (falls gemountet), damit die "erster
+# Scan pro Domain gratis"-Regel und gekauftes Guthaben Deploys/Neustarts
+# überstehen. Ohne gemountete Disk (z.B. lokal) läuft es automatisch im
+# reinen In-Memory-Fallback weiter.
 STATS_FILE = os.getenv("STATS_FILE", "/var/data/stats.json")
 
 
@@ -63,6 +65,7 @@ def _load_stats() -> dict:
         data.setdefault("scans_started", 0)
         data.setdefault("scans_completed", 0)
         data.setdefault("scanned_domains", [])
+        data.setdefault("credits", {})
         return data
     except (OSError, json.JSONDecodeError):
         return {
@@ -71,6 +74,7 @@ def _load_stats() -> dict:
             "scans_started": 0,
             "scans_completed": 0,
             "scanned_domains": [],
+            "credits": {},
         }
 
 
@@ -90,12 +94,22 @@ _stats = _load_stats()
 
 class StartScanRequest(BaseModel):
     url: str
-    promo_owner_code: str | None = None
+    promo_owner_code: Optional[str] = None
+    buyer_token: Optional[str] = None
+    lang: str = "de"
+
+
+class BuyPackageRequest(BaseModel):
+    url: str
+    package: str
+    buyer_token: str
+    lang: str = "de"
 
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     _stats["page_views"] += 1
+    lang = resolve_lang(request.headers.get("accept-language"))
     return templates.TemplateResponse(
         "index.html",
         {
@@ -103,6 +117,7 @@ async def index(request: Request):
             "stripe_configured": is_stripe_configured(),
             "asset_v": ASSET_VERSION,
             "pending_session_id": None,
+            "initial_lang": lang,
         },
     )
 
@@ -114,11 +129,12 @@ async def api_start_scan(payload: StartScanRequest):
     except ValueError:
         raise HTTPException(status_code=400, detail="Ungültige URL")
 
+    lang = resolve_lang(payload.lang)
     _stats["scans_started"] += 1
 
     # 1) Owner-Bypass: kostenlos scannen, kein Stripe nötig
     if OWNER_BYPASS_CODE and payload.promo_owner_code and payload.promo_owner_code == OWNER_BYPASS_CODE:
-        result = await run_scan(normalized)
+        result = await run_scan(normalized, lang)
         _stats["scans_completed"] += 1
         _stats["scanned_domains"].append(normalized)
         _save_stats()
@@ -126,8 +142,8 @@ async def api_start_scan(payload: StartScanRequest):
 
     # 2) Kein Stripe konfiguriert -> Scan ist aktuell kostenlos
     if not is_stripe_configured():
-        result = await run_scan(normalized)
-        result["_notice"] = "Aktuell komplett kostenlos."
+        result = await run_scan(normalized, lang)
+        result["_notice"] = t("notice.free_mode", lang)
         _stats["scans_completed"] += 1
         _stats["scanned_domains"].append(normalized)
         _save_stats()
@@ -135,21 +151,48 @@ async def api_start_scan(payload: StartScanRequest):
 
     # 3) Diese Domain wurde noch nie gescannt -> erster Scan ist gratis
     if normalized not in _stats["scanned_domains"]:
-        result = await run_scan(normalized)
-        result["_notice"] = "Der erste Scan für diesen Store ist kostenlos. Ein erneuter Scan kostet " \
-                             f"{SCAN_PRICE_EUR:.2f} €."
+        result = await run_scan(normalized, lang)
+        result["_notice"] = t("notice.first_free", lang, price="10,00" if lang == "de" else "10.00")
         _stats["scans_completed"] += 1
         _stats["scanned_domains"].append(normalized)
         _save_stats()
         return {"mode": "direct", "result": result}
 
-    # 4) Domain wurde bereits gescannt -> Stripe Checkout Session (10 EUR, Promo-Code-Feld aktiv)
-    session = create_checkout_session(normalized)
+    # 4) Domain wurde bereits gescannt -> vorhandenes Guthaben verbrauchen,
+    #    sonst zur Paket-Auswahl auffordern
+    credits = _stats["credits"].get(payload.buyer_token or "", 0)
+    if credits > 0:
+        result = await run_scan(normalized, lang)
+        _stats["credits"][payload.buyer_token] = credits - 1
+        _stats["scans_completed"] += 1
+        _stats["scanned_domains"].append(normalized)
+        _save_stats()
+        result["_notice"] = t("notice.credit_used", lang, remaining=credits - 1)
+        return {"mode": "direct", "result": result}
+
+    return {
+        "mode": "choose_package",
+        "packages": {k: {"scans": v["scans"], "eur": v["eur"]} for k, v in SCAN_PACKAGES.items()},
+    }
+
+
+@app.post("/api/buy-package")
+async def api_buy_package(payload: BuyPackageRequest):
+    if payload.package not in SCAN_PACKAGES:
+        raise HTTPException(status_code=400, detail="Ungültiges Paket")
+    try:
+        normalized = normalize_url(payload.url)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Ungültige URL")
+
+    lang = resolve_lang(payload.lang)
+    session = create_package_checkout_session(normalized, payload.package, payload.buyer_token, lang)
     return {"mode": "redirect", **session}
 
 
 @app.get("/scan/result", response_class=HTMLResponse)
-async def scan_result_page(request: Request, session_id: str | None = None):
+async def scan_result_page(request: Request, session_id: Optional[str] = None, lang: Optional[str] = None):
+    resolved_lang = resolve_lang(lang or request.headers.get("accept-language"))
     return templates.TemplateResponse(
         "index.html",
         {
@@ -157,6 +200,7 @@ async def scan_result_page(request: Request, session_id: str | None = None):
             "stripe_configured": is_stripe_configured(),
             "asset_v": ASSET_VERSION,
             "pending_session_id": session_id,
+            "initial_lang": resolved_lang,
         },
     )
 
@@ -167,14 +211,18 @@ async def api_scan_result(session_id: str):
     if cached:
         return cached
 
-    store_url = verify_paid_session(session_id)
-    if not store_url:
+    paid = verify_paid_session(session_id)
+    if not paid.store_url:
         raise HTTPException(status_code=402, detail="Zahlung nicht bestätigt oder Session ungültig.")
 
-    result = await run_scan(store_url)
+    result = await run_scan(paid.store_url, paid.lang)
+    remaining_credits = paid.scans_granted - 1
+    if paid.buyer_token and remaining_credits > 0:
+        _stats["credits"][paid.buyer_token] = _stats["credits"].get(paid.buyer_token, 0) + remaining_credits
+        result["_notice"] = t("notice.package_bought", paid.lang, remaining=_stats["credits"][paid.buyer_token])
     cache_result(session_id, result)
     _stats["scans_completed"] += 1
-    _stats["scanned_domains"].append(store_url)
+    _stats["scanned_domains"].append(paid.store_url)
     _save_stats()
     return result
 
@@ -184,7 +232,7 @@ async def api_config():
     return {
         "stripe_publishable_key": STRIPE_PUBLISHABLE_KEY,
         "stripe_configured": is_stripe_configured(),
-        "price_eur": SCAN_PRICE_EUR,
+        "packages": {k: {"scans": v["scans"], "eur": v["eur"]} for k, v in SCAN_PACKAGES.items()},
     }
 
 
@@ -195,9 +243,10 @@ async def api_stats(code: str = ""):
     domains = _stats["scanned_domains"]
     recent = list(reversed(domains))[:20]
     return {
-        **{k: v for k, v in _stats.items() if k != "scanned_domains"},
+        **{k: v for k, v in _stats.items() if k not in ("scanned_domains", "credits")},
         "unique_domains_scanned": len(set(domains)),
         "most_recent_domains": recent,
+        "buyers_with_credit": len([1 for c in _stats["credits"].values() if c > 0]),
         "note": "Wird auf einer Render Persistent Disk gespeichert (falls gemountet) und übersteht damit Deploys/Neustarts.",
     }
 

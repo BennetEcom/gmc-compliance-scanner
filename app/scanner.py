@@ -46,6 +46,8 @@ try:
 except Exception:  # pragma: no cover
     Image = None
 
+from app.i18n import DEFAULT_LANG, more_suffix, t
+
 # Viele Shopify-Stores blocken generische Scraper-User-Agents per Firewall
 # (403). Ein realistischer Browser-UA + Standard-Browser-Header reduzieren
 # False-Positives ("Shop nicht erreichbar", obwohl er es ist) deutlich.
@@ -80,32 +82,32 @@ def _get_http_concurrency() -> asyncio.Semaphore:
 # --- Policy-Seiten: Keywords, nach denen wir in Footer-Links & URLs suchen ---
 POLICY_PATTERNS = {
     "impressum": {
-        "label": "Impressum / Legal Notice",
+        "label_key": "policy.impressum",
         "keywords": ["impressum", "legal-notice", "legal notice", "imprint"],
         "severity": "critical",
     },
     "privacy": {
-        "label": "Datenschutzerklärung",
+        "label_key": "policy.privacy",
         "keywords": ["datenschutz", "privacy-policy", "privacy policy", "privacypolicy"],
         "severity": "critical",
     },
     "terms": {
-        "label": "AGB / Terms of Service",
+        "label_key": "policy.terms",
         "keywords": ["agb", "terms-of-service", "terms-and-conditions", "terms of service", "nutzungsbedingungen"],
         "severity": "high",
     },
     "refund": {
-        "label": "Widerrufsrecht / Rückgaberecht",
+        "label_key": "policy.refund",
         "keywords": ["widerruf", "ruckgabe", "rückgabe", "refund-policy", "return-policy", "refund policy", "return policy"],
         "severity": "critical",
     },
     "shipping": {
-        "label": "Versandinformationen",
+        "label_key": "policy.shipping",
         "keywords": ["versand", "shipping-policy", "shipping policy", "lieferzeit", "delivery"],
         "severity": "medium",
     },
     "contact": {
-        "label": "Kontaktmöglichkeit",
+        "label_key": "policy.contact",
         "keywords": ["kontakt", "contact-us", "contact us", "contact"],
         "severity": "high",
     },
@@ -255,7 +257,7 @@ async def fetch(client: httpx.AsyncClient, url: str, method: str = "GET", timeou
 # ---------------------------------------------------------------------------
 # 1) Trust & Domain
 # ---------------------------------------------------------------------------
-async def check_trust_domain(client: httpx.AsyncClient, base_url: str) -> CategoryResult:
+async def check_trust_domain(client: httpx.AsyncClient, base_url: str, lang: str = DEFAULT_LANG) -> CategoryResult:
     findings: list[Finding] = []
     score = 100
     parsed = urlparse(base_url)
@@ -264,21 +266,21 @@ async def check_trust_domain(client: httpx.AsyncClient, base_url: str) -> Catego
     # HTTPS erreichbar?
     resp = await fetch(client, base_url)
     if isinstance(resp, Exception):
-        findings.append(Finding("critical", "Shop nicht erreichbar",
-                                 f"Die Startseite konnte nicht geladen werden ({resp})."))
+        findings.append(Finding("critical", t("trust.unreachable_title", lang),
+                                 t("trust.unreachable_detail_exc", lang, error=resp)))
         score -= 60
     elif resp.status_code == 403:
-        findings.append(Finding("info", "Zugriff durch Bot-Schutz blockiert (403)",
-                                 "Der Shop hat eine Firewall/Bot-Schutz aktiv, die automatisierte Anfragen blockiert. Das ist kein GMC-Compliance-Problem, verhindert aber weitere automatische Checks auf dieser Seite – bitte einzelne Bereiche manuell prüfen."))
+        findings.append(Finding("info", t("trust.bot_blocked_title", lang),
+                                 t("trust.bot_blocked_detail", lang)))
     elif resp.status_code >= 400:
-        findings.append(Finding("critical", "Shop nicht erreichbar",
-                                 f"Die Startseite antwortet mit Fehlercode {resp.status_code}."))
+        findings.append(Finding("critical", t("trust.unreachable_title", lang),
+                                 t("trust.unreachable_detail_status", lang, status=resp.status_code)))
         score -= 60
     else:
         if str(resp.url).startswith("https://"):
-            findings.append(Finding("info", "HTTPS aktiv", "Die Seite wird korrekt über HTTPS ausgeliefert."))
+            findings.append(Finding("info", t("trust.https_active_title", lang), t("trust.https_active_detail", lang)))
         else:
-            findings.append(Finding("critical", "Kein HTTPS", "Google Merchant Center verlangt eine verschlüsselte Verbindung (HTTPS)."))
+            findings.append(Finding("critical", t("trust.no_https_title", lang), t("trust.no_https_detail", lang)))
             score -= 30
 
     # SSL-Zertifikat Details (Ablaufdatum)
@@ -290,15 +292,15 @@ async def check_trust_domain(client: httpx.AsyncClient, base_url: str) -> Catego
         not_after = datetime.strptime(cert["notAfter"], "%b %d %H:%M:%S %Y %Z").replace(tzinfo=timezone.utc)
         days_left = (not_after - datetime.now(timezone.utc)).days
         if days_left < 0:
-            findings.append(Finding("critical", "SSL-Zertifikat abgelaufen", f"Das Zertifikat ist seit {abs(days_left)} Tagen abgelaufen."))
+            findings.append(Finding("critical", t("trust.ssl_expired_title", lang), t("trust.ssl_expired_detail", lang, days=abs(days_left))))
             score -= 30
         elif days_left < 14:
-            findings.append(Finding("medium", "SSL-Zertifikat läuft bald ab", f"Nur noch {days_left} Tage gültig."))
+            findings.append(Finding("medium", t("trust.ssl_expiring_title", lang), t("trust.ssl_expiring_detail", lang, days=days_left)))
             score -= 10
         else:
-            findings.append(Finding("info", "SSL-Zertifikat gültig", f"Noch {days_left} Tage gültig."))
+            findings.append(Finding("info", t("trust.ssl_valid_title", lang), t("trust.ssl_valid_detail", lang, days=days_left)))
     except Exception as exc:  # noqa: BLE001
-        findings.append(Finding("info", "SSL-Zertifikat konnte nicht geprüft werden", "Technische Prüfung war nicht möglich – kein bestätigtes Problem: " + str(exc)))
+        findings.append(Finding("info", t("trust.ssl_unchecked_title", lang), t("trust.ssl_unchecked_detail", lang, error=exc)))
 
     # Domain-Alter via WHOIS
     domain_age_days: Optional[int] = None
@@ -316,16 +318,16 @@ async def check_trust_domain(client: httpx.AsyncClient, base_url: str) -> Catego
             domain_age_days = None
 
     if domain_age_days is None:
-        findings.append(Finding("info", "Domain-Alter unbekannt", "WHOIS-Daten waren nicht auslesbar (kein Rot-Flag, aber auch kein Vertrauensbonus)."))
+        findings.append(Finding("info", t("trust.domain_age_unknown_title", lang), t("trust.domain_age_unknown_detail", lang)))
     elif domain_age_days < MIN_TRUSTED_DOMAIN_AGE_DAYS:
-        findings.append(Finding("high", "Sehr junge Domain",
-                                 f"Domain ist erst {domain_age_days} Tage alt. Junge Domains werden von GMC häufiger streng geprüft ('73% der neuen Dropshipping-Stores scheitern an mind. einem Check')."))
+        findings.append(Finding("high", t("trust.domain_young_title", lang),
+                                 t("trust.domain_young_detail", lang, days=domain_age_days)))
         score -= 20
     else:
-        findings.append(Finding("info", "Domain-Alter unauffällig", f"Domain ist {domain_age_days} Tage alt."))
+        findings.append(Finding("info", t("trust.domain_age_ok_title", lang), t("trust.domain_age_ok_detail", lang, days=domain_age_days)))
 
     score = max(0, min(100, score))
-    return CategoryResult("trust", "Trust & Domain-Metriken", score, findings)
+    return CategoryResult("trust", t("cat.trust", lang), score, findings)
 
 
 # ---------------------------------------------------------------------------
@@ -404,13 +406,13 @@ async def discover_site_urls(client: httpx.AsyncClient, base_url: str, homepage_
 # ---------------------------------------------------------------------------
 # 2) Broken Links (über die gesamte erkannte Seite, nicht nur die Startseite)
 # ---------------------------------------------------------------------------
-async def check_broken_links(client: httpx.AsyncClient, base_url: str, homepage_html: Optional[str], site_urls: dict) -> CategoryResult:
+async def check_broken_links(client: httpx.AsyncClient, base_url: str, homepage_html: Optional[str], site_urls: dict, lang: str = DEFAULT_LANG) -> CategoryResult:
     findings: list[Finding] = []
     score = 100
 
     if not homepage_html:
-        findings.append(Finding("info", "Broken-Link-Check nicht möglich", "Startseite konnte nicht geladen werden – kein bestätigtes Problem, nur eine technische Einschränkung des Checks."))
-        return CategoryResult("broken_links", "Broken Links", 100, findings)
+        findings.append(Finding("info", t("links.unavailable_title", lang), t("links.unavailable_detail", lang)))
+        return CategoryResult("broken_links", t("cat.broken_links", lang), 100, findings)
 
     links = list(site_urls.get("all", []))
     total_discovered = site_urls.get("total_discovered", len(links))
@@ -455,7 +457,7 @@ async def check_broken_links(client: httpx.AsyncClient, base_url: str, homepage_
     await asyncio.gather(*(classify(u) for u in links))
 
     coverage_note = (
-        f" ({len(links)} von {total_discovered} gefundenen Seiten geprüft; die Sitemap-Erkennung selbst ist auf {MAX_SITEMAP_ENTRIES} Einträge begrenzt)"
+        t("links.coverage_note", lang, checked=len(links), total=total_discovered, max_entries=MAX_SITEMAP_ENTRIES)
         if total_discovered > len(links) else ""
     )
 
@@ -467,37 +469,37 @@ async def check_broken_links(client: httpx.AsyncClient, base_url: str, homepage_
             shown = broken[:25]
             preview = "\n".join(f"• {u}" for u, _ in shown)
             if len(broken) > len(shown):
-                preview += f"\n… und {len(broken) - len(shown)} weitere"
+                preview += more_suffix(len(broken) - len(shown), lang)
             findings.append(Finding(
                 "high" if ratio_broken > 0.15 else "medium",
-                f"{len(broken)} von {len(links)} geprüften Seiten mit 404 (Broken Link){coverage_note}",
+                t("links.broken_found_title", lang, broken=len(broken), total=len(links), coverage=coverage_note),
                 preview,
             ))
         elif not other_errors:
-            findings.append(Finding("info", "Keine Broken Links (404) gefunden", f"{len(links)} Seiten/interne Links geprüft{coverage_note}, alle erreichbar."))
+            findings.append(Finding("info", t("links.none_broken_title", lang), t("links.none_broken_detail", lang, total=len(links), coverage=coverage_note)))
         else:
-            findings.append(Finding("info", "Keine echten 404-Fehler gefunden", f"{len(links)} Seiten geprüft{coverage_note} – kein einziger 404, siehe unten für andere Statuscodes."))
+            findings.append(Finding("info", t("links.no_real_404_title", lang), t("links.no_real_404_detail", lang, total=len(links), coverage=coverage_note)))
 
         if other_errors:
             shown = other_errors[:15]
             preview = "\n".join(f"• {u} ({status})" for u, status in shown)
             if len(other_errors) > len(shown):
-                preview += f"\n… und {len(other_errors) - len(shown)} weitere"
+                preview += more_suffix(len(other_errors) - len(shown), lang)
             findings.append(Finding(
-                "info", f"{len(other_errors)} von {len(links)} Seiten mit anderem Fehlerstatus, kein 404 (nicht als Broken Link gewertet){coverage_note}",
-                f"Statuscodes wie 403/429/5xx oder Timeouts bedeuten nicht \"Seite existiert nicht\", sondern meist Firewall-/Rate-Limit-Reaktionen auf den Scan selbst – kein bestätigtes Problem, deshalb hier separat und ohne Punktabzug:\n{preview}",
+                "info", t("links.other_errors_title", lang, count=len(other_errors), total=len(links), coverage=coverage_note),
+                t("links.other_errors_detail", lang, preview=preview),
             ))
     else:
-        findings.append(Finding("info", "Keine internen Links gefunden", "Es konnten keine prüfbaren internen Seiten gefunden werden – kein bestätigtes Problem, nur eine technische Einschränkung des Checks."))
+        findings.append(Finding("info", t("links.no_internal_links_title", lang), t("links.no_internal_links_detail", lang)))
         score = 100
 
-    return CategoryResult("broken_links", "Broken Links", max(0, min(100, score)), findings)
+    return CategoryResult("broken_links", t("cat.broken_links", lang), max(0, min(100, score)), findings)
 
 
 # ---------------------------------------------------------------------------
 # 3) Policy-Seiten
 # ---------------------------------------------------------------------------
-async def check_policy_pages(client: httpx.AsyncClient, base_url: str, homepage_html: Optional[str]) -> tuple[CategoryResult, dict[str, str]]:
+async def check_policy_pages(client: httpx.AsyncClient, base_url: str, homepage_html: Optional[str], lang: str = DEFAULT_LANG) -> tuple[CategoryResult, dict[str, str]]:
     findings: list[Finding] = []
     found_keys = set()
     found_urls: dict[str, str] = {}
@@ -544,21 +546,22 @@ async def check_policy_pages(client: httpx.AsyncClient, base_url: str, homepage_
     for key, meta in POLICY_PATTERNS.items():
         w = weight_by_severity.get(meta["severity"], 10)
         total_weight += w
+        label = t(meta["label_key"], lang)
         if key in found_keys:
-            findings.append(Finding("info", f"{meta['label']} gefunden", "Seite/Link wurde erkannt."))
+            findings.append(Finding("info", t("policy.found_title", lang, label=label), t("policy.found_detail", lang)))
         else:
             lost_weight += w
-            findings.append(Finding(meta["severity"], f"{meta['label']} fehlt",
-                                     "Häufigster Ablehnungsgrund bei GMC: fehlende oder nicht auffindbare Policy-Seite."))
+            findings.append(Finding(meta["severity"], t("policy.missing_title", lang, label=label),
+                                     t("policy.missing_detail", lang)))
 
     score = round(100 * (1 - lost_weight / total_weight)) if total_weight else 100
-    return CategoryResult("policy_pages", "Policy-Seiten", max(0, min(100, score)), findings), found_urls
+    return CategoryResult("policy_pages", t("cat.policy_pages", lang), max(0, min(100, score)), findings), found_urls
 
 
 # ---------------------------------------------------------------------------
 # 4) Kontakt & Rechtliches (aus der GMC-Master-Checklist, Kategorie C/E)
 # ---------------------------------------------------------------------------
-async def check_contact_legal(client: httpx.AsyncClient, base_url: str, homepage_html: Optional[str], policy_urls: dict[str, str]) -> CategoryResult:
+async def check_contact_legal(client: httpx.AsyncClient, base_url: str, homepage_html: Optional[str], policy_urls: dict[str, str], lang: str = DEFAULT_LANG) -> CategoryResult:
     findings: list[Finding] = []
     score = 100
 
@@ -573,8 +576,8 @@ async def check_contact_legal(client: httpx.AsyncClient, base_url: str, homepage
 
     combined_html = "\n".join(pages_html.values())
     if not combined_html.strip():
-        findings.append(Finding("info", "Kontakt-Check nicht möglich", "Keine Seiteninhalte zum Analysieren geladen – kein bestätigtes Problem, nur eine technische Einschränkung des Checks."))
-        return CategoryResult("contact_legal", "Kontakt & Rechtliches", 100, findings)
+        findings.append(Finding("info", t("contact.unavailable_title", lang), t("contact.unavailable_detail", lang)))
+        return CategoryResult("contact_legal", t("cat.contact_legal", lang), 100, findings)
 
     # 1) Geschäftliche E-Mail statt privatem Anbieter
     emails_by_page = {url: set(EMAIL_RE.findall(html)) for url, html in pages_html.items()}
@@ -584,22 +587,22 @@ async def check_contact_legal(client: httpx.AsyncClient, base_url: str, homepage
         personal = {e for e in all_emails if e.split("@")[-1].lower() in PERSONAL_EMAIL_DOMAINS}
         if personal and len(personal) == len(all_emails):
             findings.append(Finding(
-                "medium", "Nur private E-Mail-Adresse(n) gefunden (z. B. Gmail/GMX)",
-                f"Gefunden: {', '.join(sorted(personal))}. GMC-Reviewer werten eine geschäftliche Adresse (info@{host}) als Vertrauenssignal.",
+                "medium", t("contact.only_personal_email_title", lang),
+                t("contact.only_personal_email_detail", lang, emails=", ".join(sorted(personal)), host=host),
             ))
             score -= 15
         else:
-            findings.append(Finding("info", "Geschäftliche E-Mail-Adresse gefunden", f"{', '.join(sorted(all_emails))[:200]}"))
+            findings.append(Finding("info", t("contact.business_email_title", lang), f"{', '.join(sorted(all_emails))[:200]}"))
     else:
-        findings.append(Finding("high", "Keine E-Mail-Adresse im Seitentext gefunden", "Weder Startseite noch Kontakt-/Rechtsseiten enthalten eine erkennbare E-Mail-Adresse."))
+        findings.append(Finding("high", t("contact.no_email_title", lang), t("contact.no_email_detail", lang)))
         score -= 20
 
     # 2) Telefonnummer sichtbar
     if not PHONE_RE.search(combined_html):
-        findings.append(Finding("medium", "Keine Telefonnummer gefunden", "Google-Reviewer werten eine sichtbare Telefonnummer als Vertrauenssignal (Checklist-Punkt C)."))
+        findings.append(Finding("medium", t("contact.no_phone_title", lang), t("contact.no_phone_detail", lang)))
         score -= 10
     else:
-        findings.append(Finding("info", "Telefonnummer gefunden", "Eine Telefonnummer ist im Footer/Kontakt-Bereich erkennbar."))
+        findings.append(Finding("info", t("contact.phone_found_title", lang), t("contact.phone_found_detail", lang)))
 
     # 3) NAP-Konsistenz: identische E-Mail über alle geprüften Seiten hinweg
     non_empty_pages = {url: emails for url, emails in emails_by_page.items() if emails}
@@ -607,8 +610,8 @@ async def check_contact_legal(client: httpx.AsyncClient, base_url: str, homepage
         distinct = set().union(*non_empty_pages.values())
         if len(distinct) > 1:
             findings.append(Finding(
-                "high", "Unterschiedliche E-Mail-Adressen auf verschiedenen Seiten",
-                f"Gefunden: {', '.join(sorted(distinct))}. Google verlangt identische Kontaktdaten auf Footer, Kontaktseite und Rechtstexten (NAP-Konsistenz).",
+                "high", t("contact.nap_mismatch_title", lang),
+                t("contact.nap_mismatch_detail", lang, emails=", ".join(sorted(distinct))),
             ))
             score -= 20
 
@@ -617,8 +620,7 @@ async def check_contact_legal(client: httpx.AsyncClient, base_url: str, homepage
     placeholder_hits = {p for p in PLACEHOLDER_PATTERNS if re.search(p, lower_combined)}
     if placeholder_hits:
         findings.append(Finding(
-            "critical", "Platzhalter-/Beispieltext auf der Seite gefunden",
-            "Erkannte Muster wie eckige Klammern, 'Lorem Ipsum' oder Formular-Vorbelegungen (z. B. 'you@email.com'). Google hat das in einem Support-Ticket 2026-07 explizit als Ablehnungsgrund genannt.",
+            "critical", t("contact.placeholder_title", lang), t("contact.placeholder_detail", lang),
         ))
         score -= 25
 
@@ -633,13 +635,13 @@ async def check_contact_legal(client: httpx.AsyncClient, base_url: str, homepage
     if dead_ends:
         listing = "\n".join(f"• {base_url}{p}" for p in dead_ends)
         findings.append(Finding(
-            "low", f"{len(dead_ends)} von {len(GUESSED_PATHS)} typischen Standard-URLs enden auf 404",
-            f"{listing}\nNicht kritisch, wenn diese Seiten nie existiert haben – idealerweise leiten geratene Standard-URLs auf eine echte Seite weiter statt auf einen Fehler.",
+            "low", t("contact.dead_ends_title", lang, count=len(dead_ends), total=len(GUESSED_PATHS)),
+            t("contact.dead_ends_detail", lang, listing=listing),
         ))
         score -= min(10, len(dead_ends) * 2)
 
     score = max(0, min(100, score))
-    return CategoryResult("contact_legal", "Kontakt & Rechtliches", score, findings)
+    return CategoryResult("contact_legal", t("cat.contact_legal", lang), score, findings)
 
 
 # ---------------------------------------------------------------------------
@@ -649,7 +651,7 @@ MAX_NAV_COLLECTIONS_TO_CHECK = 15
 EMPTY_COLLECTION_THRESHOLD = 3
 
 
-async def check_nav_collections(client: httpx.AsyncClient, base_url: str, homepage_html: Optional[str]) -> list[Finding]:
+async def check_nav_collections(client: httpx.AsyncClient, base_url: str, homepage_html: Optional[str], lang: str = DEFAULT_LANG) -> list[Finding]:
     """Prüft im Hauptmenü verlinkte Kollektionen: eine Nav-Kachel, die auf eine
     leere/fast leere Kollektion zeigt, wirkt für Google-Reviewer wie ein
     unfertiger Store (Source: misrep 2026-07, Google-Support-Runde)."""
@@ -686,32 +688,31 @@ async def check_nav_collections(client: httpx.AsyncClient, base_url: str, homepa
     if not empty:
         return []
     return [Finding(
-        "medium", f"{len(empty)} im Menü verlinkte Kollektion(en) mit ≤{EMPTY_COLLECTION_THRESHOLD} Produkten",
-        f"Betroffen: {', '.join(empty)}. Eine Navigation, die auf eine leere/fast leere Kategorie zeigt, wirkt für Google-Reviewer wie ein unfertiger Store.",
+        "medium", t("feed.empty_collections_title", lang, count=len(empty), threshold=EMPTY_COLLECTION_THRESHOLD),
+        t("feed.empty_collections_detail", lang, list=", ".join(empty)),
     )]
 
 
-async def check_product_feed(client: httpx.AsyncClient, base_url: str, homepage_html: Optional[str] = None) -> tuple[CategoryResult, list[dict]]:
+async def check_product_feed(client: httpx.AsyncClient, base_url: str, homepage_html: Optional[str] = None, lang: str = DEFAULT_LANG) -> tuple[CategoryResult, list[dict]]:
     findings: list[Finding] = []
     products_sample: list[dict] = []
     score = 100
 
     resp = await fetch(client, urljoin(base_url, "/products.json?limit=" + str(MAX_PRODUCTS_TO_SAMPLE)))
     if isinstance(resp, Exception) or resp.status_code >= 400:
-        findings.append(Finding("info", "Kein Shopify products.json-Feed gefunden",
-                                 "Store scheint nicht auf Shopify zu laufen oder der Feed ist deaktiviert – Feed-Qualität kann nicht automatisch geprüft werden. Kein bestätigtes Problem."))
-        return CategoryResult("product_feed", "Produkt-Feed-Qualität", 100, findings), products_sample
+        findings.append(Finding("info", t("feed.no_feed_title", lang), t("feed.no_feed_detail", lang)))
+        return CategoryResult("product_feed", t("cat.product_feed", lang), 100, findings), products_sample
 
     try:
         data = resp.json()
         products = data.get("products", [])[:MAX_PRODUCTS_TO_SAMPLE]
     except Exception:
-        findings.append(Finding("info", "Produkt-Feed nicht auswertbar", "products.json konnte nicht als JSON gelesen werden – kein bestätigtes Problem, nur eine technische Einschränkung des Checks."))
-        return CategoryResult("product_feed", "Produkt-Feed-Qualität", 100, findings), products_sample
+        findings.append(Finding("info", t("feed.unparseable_title", lang), t("feed.unparseable_detail", lang)))
+        return CategoryResult("product_feed", t("cat.product_feed", lang), 100, findings), products_sample
 
     if not products:
-        findings.append(Finding("info", "Keine Produkte im Feed gefunden", "Store hat aktuell keine sichtbaren Produkte über products.json – kein bestätigtes Problem, nur eine technische Einschränkung des Checks."))
-        return CategoryResult("product_feed", "Produkt-Feed-Qualität", 100, findings), products_sample
+        findings.append(Finding("info", t("feed.no_products_title", lang), t("feed.no_products_detail", lang)))
+        return CategoryResult("product_feed", t("cat.product_feed", lang), 100, findings), products_sample
 
     missing_brand = 0
     missing_gtin = 0
@@ -765,57 +766,57 @@ async def check_product_feed(client: httpx.AsyncClient, base_url: str, homepage_
         return round(100 * x / n)
 
     if missing_gtin:
-        findings.append(Finding("critical", f"{pct(missing_gtin)}% der Produkte ohne GTIN/Barcode",
-                                 "Fehlende eindeutige Produktkennung (GTIN/MPN) ist einer der häufigsten GMC-Ablehnungsgründe für Produktdaten."))
+        findings.append(Finding("critical", t("feed.missing_gtin_title", lang, pct=pct(missing_gtin)),
+                                 t("feed.missing_gtin_detail", lang)))
         score -= min(35, missing_gtin * 6)
     if missing_brand:
-        findings.append(Finding("high", f"{pct(missing_brand)}% der Produkte ohne erkennbare Marke (Vendor-Feld)",
-                                 "GMC verlangt in der Regel Brand + GTIN oder eine Ausnahmekennzeichnung."))
+        findings.append(Finding("high", t("feed.missing_brand_title", lang, pct=pct(missing_brand)),
+                                 t("feed.missing_brand_detail", lang)))
         score -= min(25, missing_brand * 4)
     if missing_price:
-        findings.append(Finding("high", f"{pct(missing_price)}% der Produkte ohne gültigen Preis", "Preis muss > 0 und konsistent mit der Produktseite sein."))
+        findings.append(Finding("high", t("feed.missing_price_title", lang, pct=pct(missing_price)), t("feed.missing_price_detail", lang)))
         score -= min(20, missing_price * 5)
     if missing_desc:
-        findings.append(Finding("medium", f"{pct(missing_desc)}% der Produkte ohne Produktbeschreibung", "Leere Beschreibungen gelten als 'Thin Content'."))
+        findings.append(Finding("medium", t("feed.missing_desc_title", lang, pct=pct(missing_desc)), t("feed.missing_desc_detail", lang)))
         score -= min(15, missing_desc * 3)
     elif thin_desc:
-        findings.append(Finding("low", f"{pct(thin_desc)}% der Produkte mit sehr kurzer Beschreibung (<100 Zeichen)", "Kurze/duplizierte Texte erhöhen das Risiko einer Ablehnung wegen 'Thin Content'."))
+        findings.append(Finding("low", t("feed.thin_desc_title", lang, pct=pct(thin_desc)), t("feed.thin_desc_detail", lang)))
         score -= min(10, thin_desc * 2)
 
     if duplicate_skus:
         listing = "\n".join(f"• {sku} ({c}×)" for sku, c in duplicate_skus.items())
-        findings.append(Finding("high", f"{len(duplicate_skus)} SKU(s) mehrfach vergeben", f"{listing}\nSKUs müssen pro Variante eindeutig sein."))
+        findings.append(Finding("high", t("feed.duplicate_skus_title", lang, count=len(duplicate_skus)), t("feed.duplicate_skus_detail", lang, listing=listing)))
         score -= min(20, len(duplicate_skus) * 5)
 
     if inverted_compare_at:
         findings.append(Finding(
-            "high", f"{inverted_compare_at} Variante(n) mit unglaubwürdigem Streichpreis",
-            "Der 'Compare-at'-Preis (Streichpreis) ist kleiner oder gleich dem aktuellen Preis. Ein Streichpreis, der keinen echten Rabatt zeigt, ist ein klassisches Fake-Sale-Muster.",
+            "high", t("feed.inverted_compare_title", lang, count=inverted_compare_at),
+            t("feed.inverted_compare_detail", lang),
         ))
         score -= min(20, inverted_compare_at * 5)
 
     if used_wording:
         findings.append(Finding(
-            "medium", f"{used_wording} Produktbeschreibung(en) mit 'gebraucht/refurbished'-Wortlaut",
-            "GMC verlangt condition=new für neue Ware; Wörter wie 'refurbished' oder 'gebraucht' in der Beschreibung widersprechen dem.",
+            "medium", t("feed.used_wording_title", lang, count=used_wording),
+            t("feed.used_wording_detail", lang),
         ))
         score -= min(15, used_wording * 5)
 
     if not missing_gtin and not missing_brand and not missing_price and not missing_desc and not duplicate_skus and not inverted_compare_at and not used_wording:
-        findings.append(Finding("info", "Stichprobe unauffällig", f"{n} Produkte geprüft, keine offensichtlichen Feed-Probleme gefunden."))
+        findings.append(Finding("info", t("feed.sample_ok_title", lang), t("feed.sample_ok_detail", lang, n=n)))
 
-    collection_findings = await check_nav_collections(client, base_url, homepage_html)
+    collection_findings = await check_nav_collections(client, base_url, homepage_html, lang)
     if collection_findings:
         findings.extend(collection_findings)
         score -= 10
 
-    return CategoryResult("product_feed", "Produkt-Feed-Qualität", max(0, min(100, score)), findings), products_sample
+    return CategoryResult("product_feed", t("cat.product_feed", lang), max(0, min(100, score)), findings), products_sample
 
 
 # ---------------------------------------------------------------------------
 # 6) Bild-Compliance
 # ---------------------------------------------------------------------------
-async def check_images(client: httpx.AsyncClient, base_url: str, products_sample: list[dict]) -> CategoryResult:
+async def check_images(client: httpx.AsyncClient, base_url: str, products_sample: list[dict], lang: str = DEFAULT_LANG) -> CategoryResult:
     findings: list[Finding] = []
     score = 100
 
@@ -830,8 +831,8 @@ async def check_images(client: httpx.AsyncClient, base_url: str, products_sample
     image_urls = image_urls[:50]
 
     if not image_urls:
-        findings.append(Finding("info", "Keine Produktbilder zum Prüfen gefunden", "Bild-Compliance konnte nicht automatisch bewertet werden – kein bestätigtes Problem, nur eine technische Einschränkung des Checks."))
-        return CategoryResult("images", "Bild-Compliance", 100, findings)
+        findings.append(Finding("info", t("images.none_found_title", lang), t("images.none_found_detail", lang)))
+        return CategoryResult("images", t("cat.images", lang), 100, findings)
 
     broken = 0
     too_small = 0
@@ -857,18 +858,18 @@ async def check_images(client: httpx.AsyncClient, base_url: str, products_sample
 
     n = len(image_urls)
     if broken:
-        findings.append(Finding("high", f"{broken} von {n} Produktbildern nicht ladbar", "Nicht erreichbare Bilder führen zur Ablehnung einzelner Produkte im Feed."))
+        findings.append(Finding("high", t("images.broken_title", lang, broken=broken, n=n), t("images.broken_detail", lang)))
         score -= min(40, broken * 8)
     if too_small:
-        findings.append(Finding("medium", f"{too_small} Bilder unter {MIN_IMAGE_EDGE_PX}px Kantenlänge",
-                                 f"Google empfiehlt mindestens {RECOMMENDED_IMAGE_EDGE_PX}px für die kürzere Bildkante."))
+        findings.append(Finding("medium", t("images.too_small_title", lang, count=too_small, min_px=MIN_IMAGE_EDGE_PX),
+                                 t("images.too_small_detail", lang, rec_px=RECOMMENDED_IMAGE_EDGE_PX)))
         score -= min(25, too_small * 5)
     if not broken and not too_small:
-        findings.append(Finding("info", "Bilder unauffällig", f"{checked} Bilder geprüft, erreichbar und ausreichend groß."))
+        findings.append(Finding("info", t("images.ok_title", lang), t("images.ok_detail", lang, checked=checked)))
 
-    findings.append(Finding("info", "Hinweis", "Text-Overlays, Wasserzeichen und Rabatt-Banner in Bildern können nicht automatisiert erkannt werden – bitte manuell stichprobenartig prüfen."))
+    findings.append(Finding("info", t("images.note_title", lang), t("images.note_detail", lang)))
 
-    return CategoryResult("images", "Bild-Compliance", max(0, min(100, score)), findings)
+    return CategoryResult("images", t("cat.images", lang), max(0, min(100, score)), findings)
 
 
 # ---------------------------------------------------------------------------
@@ -880,59 +881,53 @@ GOOD_HTML_SIZE_KB = 300
 OK_HTML_SIZE_KB = 800
 
 
-async def check_page_speed(client: httpx.AsyncClient, base_url: str) -> CategoryResult:
+async def check_page_speed(client: httpx.AsyncClient, base_url: str, lang: str = DEFAULT_LANG) -> CategoryResult:
     findings: list[Finding] = []
-    label = "Page Speed"
+    label = t("cat.page_speed", lang)
 
     started = time.monotonic()
     resp = await fetch(client, base_url, timeout=httpx.Timeout(20.0, connect=8.0))
     load_time_s = time.monotonic() - started
 
     if isinstance(resp, Exception) or resp.status_code >= 400:
-        findings.append(Finding(
-            "info", "Page-Speed-Check nicht möglich",
-            "Startseite konnte für die Ladezeitmessung nicht abgerufen werden – kein bestätigtes Problem, nur eine technische Einschränkung des Checks.",
-        ))
+        findings.append(Finding("info", t("speed.unavailable_title", lang), t("speed.unavailable_detail", lang)))
         return CategoryResult("page_speed", label, 100, findings)
 
     html_kb = len(resp.content) / 1024
     score = 100
 
     if load_time_s <= GOOD_LOAD_TIME_S:
-        findings.append(Finding("info", f"Ladezeit Startseite: {load_time_s:.2f}s",
-                                 "Schnell – innerhalb eines guten Bereichs."))
+        findings.append(Finding("info", t("speed.load_time_title", lang, seconds=f"{load_time_s:.2f}"),
+                                 t("speed.load_fast_detail", lang)))
     elif load_time_s <= OK_LOAD_TIME_S:
         findings.append(Finding(
-            "medium", f"Ladezeit Startseite: {load_time_s:.2f}s",
-            "Spürbar langsam – eine langsame Seite verschlechtert Nutzererfahrung und Conversion.",
+            "medium", t("speed.load_time_title", lang, seconds=f"{load_time_s:.2f}"),
+            t("speed.load_medium_detail", lang),
         ))
         score -= 20
     else:
         findings.append(Finding(
-            "high", f"Ladezeit Startseite: {load_time_s:.2f}s",
-            "Sehr langsam. Nutzer springen bei Ladezeiten über 3 Sekunden überdurchschnittlich häufig ab.",
+            "high", t("speed.load_time_title", lang, seconds=f"{load_time_s:.2f}"),
+            t("speed.load_slow_detail", lang),
         ))
         score -= 35
 
     if html_kb <= GOOD_HTML_SIZE_KB:
-        findings.append(Finding("info", f"HTML-Größe Startseite: {html_kb:.0f} KB", "Kompakt."))
+        findings.append(Finding("info", t("speed.html_size_title", lang, kb=f"{html_kb:.0f}"), t("speed.html_compact_detail", lang)))
     elif html_kb <= OK_HTML_SIZE_KB:
         findings.append(Finding(
-            "low", f"HTML-Größe Startseite: {html_kb:.0f} KB",
-            "Etwas groß – kann auf langsamen Verbindungen spürbar sein.",
+            "low", t("speed.html_size_title", lang, kb=f"{html_kb:.0f}"),
+            t("speed.html_large_detail", lang),
         ))
         score -= 5
     else:
         findings.append(Finding(
-            "medium", f"HTML-Größe Startseite: {html_kb:.0f} KB",
-            "Sehr groß für reines HTML – ggf. prüfen, ob unnötig viel Inline-Code/Markup mitgeliefert wird.",
+            "medium", t("speed.html_size_title", lang, kb=f"{html_kb:.0f}"),
+            t("speed.html_toolarge_detail", lang),
         ))
         score -= 10
 
-    findings.append(Finding(
-        "info", "Hinweis zur Messmethode",
-        "Basiert auf einem einzelnen Server-Request unserer Scan-Engine (Ladezeit + reine HTML-Größe), nicht auf einer echten Lighthouse-Analyse im Browser (kein LCP/CLS/JS-Rendering enthalten). Für eine vollständige Web-Vitals-Analyse: pagespeed.web.dev.",
-    ))
+    findings.append(Finding("info", t("speed.methodology_title", lang), t("speed.methodology_detail", lang)))
 
     score = max(0, min(100, score))
     return CategoryResult("page_speed", label, score, findings)
@@ -967,14 +962,14 @@ _REVIEW_BLOCK_RE = re.compile(
 # ---------------------------------------------------------------------------
 # 7) Bewertungen & Social Proof
 # ---------------------------------------------------------------------------
-async def check_reviews(homepage_html: Optional[str], product_pages: list[tuple[str, str]]) -> CategoryResult:
+async def check_reviews(homepage_html: Optional[str], product_pages: list[tuple[str, str]], lang: str = DEFAULT_LANG) -> CategoryResult:
     findings: list[Finding] = []
     score = 100
 
     all_html = (homepage_html or "") + "".join(html for _, html in product_pages)
     if not all_html.strip():
-        findings.append(Finding("info", "Bewertungen konnten nicht geprüft werden", "Keine Seiteninhalte zum Analysieren geladen – kein bestätigtes Problem, nur eine technische Einschränkung des Checks."))
-        return CategoryResult("reviews", "Bewertungen & Social Proof", 100, findings)
+        findings.append(Finding("info", t("reviews.unavailable_title", lang), t("reviews.unavailable_detail", lang)))
+        return CategoryResult("reviews", t("cat.reviews", lang), 100, findings)
 
     lower_html = all_html.lower()
     detected_platforms = sorted({name for sig, name in KNOWN_REVIEW_PLATFORMS.items() if sig in lower_html})
@@ -982,17 +977,17 @@ async def check_reviews(homepage_html: Optional[str], product_pages: list[tuple[
 
     if detected_platforms:
         findings.append(Finding(
-            "info", "Verifizierbare Bewertungsplattform erkannt",
-            f"Erkannt: {', '.join(detected_platforms)}. Über Dritte nachprüfbare Bewertungen sind für Google unkritisch.",
+            "info", t("reviews.platform_found_title", lang),
+            t("reviews.platform_found_detail", lang, platforms=", ".join(detected_platforms)),
         ))
     elif claims_reviews:
         findings.append(Finding(
-            "high", "Sternebewertungen/Rezensionszahlen ohne erkennbare Drittanbieter-Plattform",
-            "Es werden Bewertungen bzw. Ratings angezeigt, aber kein bekannter Bewertungs-Dienst (z. B. Trustpilot, Judge.me, Loox) konnte im Code gefunden werden. Nicht verifizierbare Testimonials verstoßen gegen Googles Richtlinie zu 'Misrepresentation'.",
+            "high", t("reviews.unverifiable_title", lang),
+            t("reviews.unverifiable_detail", lang),
         ))
         score -= 35
     else:
-        findings.append(Finding("info", "Keine Bewertungen auf der Seite gefunden", "Weder Rating-Claims noch eine Bewertungsplattform erkannt – kein bestätigtes Problem."))
+        findings.append(Finding("info", t("reviews.none_found_title", lang), t("reviews.none_found_detail", lang)))
 
     # Identische Review-Texte über mehrere Produktseiten hinweg = klassisches
     # Fake-Review-Muster (kopierte Templates statt echter Kundenstimmen).
@@ -1003,33 +998,33 @@ async def check_reviews(homepage_html: Optional[str], product_pages: list[tuple[
     seen: dict[str, str] = {}
     duplicates = set()
     for url, texts in texts_by_url.items():
-        for t in texts:
-            if t in seen and seen[t] != url:
-                duplicates.add(t)
-            seen[t] = url
+        for txt in texts:
+            if txt in seen and seen[txt] != url:
+                duplicates.add(txt)
+            seen[txt] = url
 
     if duplicates:
         example = next(iter(duplicates))[:120]
         findings.append(Finding(
-            "critical", f"{len(duplicates)} identische Bewertungstexte auf mehreren Produktseiten",
-            f"Beispieltext: \"{example}...\". Wortgleiche 'Kundenstimmen' auf unterschiedlichen Produkten sind ein starkes Indiz für gefälschte Bewertungen.",
+            "critical", t("reviews.duplicates_title", lang, count=len(duplicates)),
+            t("reviews.duplicates_detail", lang, example=example),
         ))
         score -= 40
 
     score = max(0, min(100, score))
-    return CategoryResult("reviews", "Bewertungen & Social Proof", score, findings)
+    return CategoryResult("reviews", t("cat.reviews", lang), score, findings)
 
 
 # ---------------------------------------------------------------------------
 # 8) Künstliche Dringlichkeit / Verknappung ("Fake Urgency")
 # ---------------------------------------------------------------------------
-async def check_urgency_patterns(product_pages: list[tuple[str, str]], products_sample: list[dict]) -> CategoryResult:
+async def check_urgency_patterns(product_pages: list[tuple[str, str]], products_sample: list[dict], lang: str = DEFAULT_LANG) -> CategoryResult:
     findings: list[Finding] = []
     score = 100
 
     if not product_pages:
-        findings.append(Finding("info", "Urgency-Check nicht möglich", "Keine Produktseiten zum Analysieren geladen – kein bestätigtes Problem, nur eine technische Einschränkung des Checks."))
-        return CategoryResult("urgency", "Künstliche Dringlichkeit", 100, findings)
+        findings.append(Finding("info", t("urgency.unavailable_title", lang), t("urgency.unavailable_detail", lang)))
+        return CategoryResult("urgency", t("cat.urgency", lang), 100, findings)
 
     text_hits: set[str] = set()
     app_hits: set[str] = set()
@@ -1043,20 +1038,20 @@ async def check_urgency_patterns(product_pages: list[tuple[str, str]], products_
                 app_hits.add(sig)
 
     if not text_hits and not app_hits:
-        findings.append(Finding("info", "Keine künstlichen Dringlichkeits-Trigger gefunden", "Keine Fake-Countdown-/Verknappungs-Muster auf den geprüften Produktseiten entdeckt."))
-        return CategoryResult("urgency", "Künstliche Dringlichkeit", 100, findings)
+        findings.append(Finding("info", t("urgency.none_found_title", lang), t("urgency.none_found_detail", lang)))
+        return CategoryResult("urgency", t("cat.urgency", lang), 100, findings)
 
     if app_hits:
         findings.append(Finding(
-            "medium", "Countdown-/Verknappungs-App erkannt",
-            f"Erkannte Skripte: {', '.join(sorted(app_hits))}. Solche Apps sind nicht automatisch verboten, aber die angezeigten Werte müssen real sein.",
+            "medium", t("urgency.app_found_title", lang),
+            t("urgency.app_found_detail", lang, apps=", ".join(sorted(app_hits))),
         ))
         score -= 15
 
     if text_hits:
         findings.append(Finding(
-            "high", "Formulierungen mit künstlicher Dringlichkeit/Verknappung gefunden",
-            "z. B. 'nur noch X auf Lager', 'Angebot endet in...', Verkaufszähler. Google Ads' Misrepresentation-Richtlinie verbietet vorgetäuschte Knappheit/Dringlichkeit, wenn die Angaben nicht der Realität entsprechen – bitte manuell gegen den echten Lagerbestand prüfen.",
+            "high", t("urgency.text_found_title", lang),
+            t("urgency.text_found_detail", lang),
         ))
         score -= 30
 
@@ -1070,19 +1065,19 @@ async def check_urgency_patterns(product_pages: list[tuple[str, str]], products_
             untracked += 1
     if text_hits and products_sample and untracked == len(products_sample):
         findings.append(Finding(
-            "critical", "Lagerbestand wird laut Shopify gar nicht getrackt",
-            "Für keines der geprüften Produkte ist Bestandsverfolgung aktiv – angezeigte 'Nur noch X verfügbar'-Hinweise können daher nicht auf echten Zahlen beruhen.",
+            "critical", t("urgency.untracked_title", lang),
+            t("urgency.untracked_detail", lang),
         ))
         score -= 25
 
     score = max(0, min(100, score))
-    return CategoryResult("urgency", "Künstliche Dringlichkeit", score, findings)
+    return CategoryResult("urgency", t("cat.urgency", lang), score, findings)
 
 
 # ---------------------------------------------------------------------------
 # Orchestrierung
 # ---------------------------------------------------------------------------
-async def run_scan(raw_url: str) -> dict:
+async def run_scan(raw_url: str, lang: str = DEFAULT_LANG) -> dict:
     base_url = normalize_url(raw_url)
 
     async with httpx.AsyncClient(headers=DEFAULT_HEADERS) as client:
@@ -1093,21 +1088,21 @@ async def run_scan(raw_url: str) -> dict:
 
         site_urls = await discover_site_urls(client, base_url, homepage_html)
 
-        trust_task = check_trust_domain(client, base_url)
-        links_task = check_broken_links(client, base_url, homepage_html, site_urls)
-        policy_task = check_policy_pages(client, base_url, homepage_html)
-        feed_task = check_product_feed(client, base_url, homepage_html)
-        speed_task = check_page_speed(client, base_url)
+        trust_task = check_trust_domain(client, base_url, lang)
+        links_task = check_broken_links(client, base_url, homepage_html, site_urls, lang)
+        policy_task = check_policy_pages(client, base_url, homepage_html, lang)
+        feed_task = check_product_feed(client, base_url, homepage_html, lang)
+        speed_task = check_page_speed(client, base_url, lang)
 
         trust_res, links_res, (policy_res, policy_urls), (feed_res, products_sample), speed_res = await asyncio.gather(
             trust_task, links_task, policy_task, feed_task, speed_task
         )
-        images_res = await check_images(client, base_url, products_sample)
-        contact_res = await check_contact_legal(client, base_url, homepage_html, policy_urls)
+        images_res = await check_images(client, base_url, products_sample, lang)
+        contact_res = await check_contact_legal(client, base_url, homepage_html, policy_urls, lang)
 
         product_pages = await fetch_product_pages(client, site_urls.get("product_urls", []))
-        reviews_res = await check_reviews(homepage_html, product_pages)
-        urgency_res = await check_urgency_patterns(product_pages, products_sample)
+        reviews_res = await check_reviews(homepage_html, product_pages, lang)
+        urgency_res = await check_urgency_patterns(product_pages, products_sample, lang)
 
     categories = [trust_res, links_res, policy_res, contact_res, feed_res, images_res, reviews_res, urgency_res, speed_res]
 
@@ -1125,11 +1120,11 @@ async def run_scan(raw_url: str) -> dict:
     overall = round(sum(c.score * weights[c.key] for c in categories))
 
     if overall >= 80:
-        risk_label = "Niedriges Sperrrisiko"
+        risk_label = t("risk.low", lang)
     elif overall >= 50:
-        risk_label = "Mittleres Sperrrisiko"
+        risk_label = t("risk.medium", lang)
     else:
-        risk_label = "Hohes Sperrrisiko"
+        risk_label = t("risk.high", lang)
 
     critical_count = sum(1 for c in categories for f in c.findings if f.severity == "critical")
 

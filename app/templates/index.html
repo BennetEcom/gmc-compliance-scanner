@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="{{ initial_lang }}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GMCApprove.ai – Prüfe deinen Store vor der Google-Sperrung</title>
+  <title data-i18n="meta.title">GMCApprove – Prüfe deinen Store vor der Google-Sperrung</title>
+  <link rel="icon" type="image/svg+xml" href="/static/img/logo.svg?v={{ asset_v }}" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -15,26 +16,42 @@
   <header class="topbar">
     <div class="container topbar-inner">
       <div class="brand">
-        <span class="brand-mark">G</span>
-        <span class="brand-name">GMC<span class="accent">Approve.ai</span></span>
+        <span class="brand-mark">
+          <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <defs>
+              <linearGradient id="brandMarkGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="var(--blue)"/>
+                <stop offset="100%" stop-color="var(--blue-dark)"/>
+              </linearGradient>
+            </defs>
+            <path d="M16 2 L28 6.5 V15 C28 22.5 22.8 27.8 16 30 C9.2 27.8 4 22.5 4 15 V6.5 Z" fill="url(#brandMarkGrad)"/>
+            <path d="M10.5 16.2 L14.3 20 L21.8 12" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="brand-name">GMC<span class="accent">Approve</span></span>
       </div>
       <nav class="nav-links">
-        <a href="#features">Prüfbereiche</a>
-        <a href="#how">So funktioniert's</a>
-        <a href="#why">Warum GMCApprove.ai</a>
+        <a href="#features" data-i18n="nav.features">Prüfbereiche</a>
+        <a href="#how" data-i18n="nav.how">So funktioniert's</a>
+        <a href="#pricing" data-i18n="nav.pricing">Preise</a>
+        <a href="#why" data-i18n="nav.why">Warum GMCApprove</a>
       </nav>
       <div class="topbar-badges">
-        <span class="pill">🔒 Keine Anmeldung</span>
-        <span class="pill">🗑️ Keine Speicherung</span>
+        <span class="pill" data-i18n="badge.no_login">🔒 Keine Anmeldung</span>
+        <span class="pill" data-i18n="badge.no_storage">🗑️ Keine Speicherung</span>
+        <div class="lang-toggle" role="group" aria-label="Language">
+          <button type="button" class="lang-btn" data-lang-btn="de">DE</button>
+          <button type="button" class="lang-btn" data-lang-btn="en">EN</button>
+        </div>
       </div>
     </div>
   </header>
 
   <main>
     <section id="hero" class="hero-centered container">
-      <p class="eyebrow-pill"><span class="pulse-dot"></span> AI GMC Compliance Scan</p>
-      <h1>Bevor Google dich sperrt,<br /><span class="accent">solltest du es wissen.</span></h1>
-      <p class="lead">
+      <p class="eyebrow-pill"><span class="pulse-dot"></span> <span data-i18n="hero.eyebrow">AI GMC Compliance Scan</span></p>
+      <h1><span data-i18n="hero.h1_line1">Bevor Google dich sperrt,</span><br /><span class="accent" data-i18n="hero.h1_line2">solltest du es wissen.</span></h1>
+      <p class="lead" data-i18n-html="hero.lead">
         Wir prüfen deinen kompletten Shop live gegen die wichtigsten Google&nbsp;Merchant&nbsp;Center
         Richtlinien – von Policy-Seiten über den Produkt-Feed bis zu Fake-Bewertungen und
         künstlicher Dringlichkeit. Gründlicher Scan über den ganzen Shop – Ergebnis in wenigen Minuten.
@@ -45,38 +62,39 @@
           <input
             id="store-url"
             type="text"
+            data-i18n-placeholder="hero.input_placeholder"
             placeholder="deinshop.myshopify.com"
             required
             autocomplete="off"
           />
-          <button type="submit" id="scan-btn">
+          <button type="submit" id="scan-btn" data-i18n="hero.scan_btn">
             Kostenlos scannen
           </button>
         </div>
         <p id="form-error" class="form-error" hidden></p>
-        <p class="price-note">🎁 Erster Scan pro Store <strong>kostenlos</strong> – jeder weitere Scan derselben Domain kostet <strong>10&nbsp;€</strong>.</p>
+        <p class="price-note" data-i18n-html="hero.price_note">🎁 Erster Scan pro Store <strong>kostenlos</strong> – jeder weitere Scan derselben Domain kostet <strong>10&nbsp;€</strong>.</p>
       </form>
 
       <div class="stat-row centered">
         <div class="stat">
           <div class="stat-num">73%</div>
-          <div class="stat-label">neuer Dropshipping-Stores scheitern an mind. 1 GMC-Check</div>
+          <div class="stat-label" data-i18n="hero.stat1_label">neuer Dropshipping-Stores scheitern an mind. 1 GMC-Check</div>
         </div>
         <div class="stat">
           <div class="stat-num">8</div>
-          <div class="stat-label">Prüfbereiche in einem Scan</div>
+          <div class="stat-label" data-i18n="hero.stat2_label">Prüfbereiche in einem Scan</div>
         </div>
         <div class="stat">
-          <div class="stat-num">Alle</div>
-          <div class="stat-label">gefundenen Seiten geprüft, nichts wird übersprungen</div>
+          <div class="stat-num" data-i18n="hero.stat3_num">Alle</div>
+          <div class="stat-label" data-i18n="hero.stat3_label">gefundenen Seiten geprüft, nichts wird übersprungen</div>
         </div>
       </div>
 
       <div class="hero-visual">
-        <span class="preview-caption">Beispiel-Ansicht – dein echtes Ergebnis erscheint nach dem Scan</span>
+        <span class="preview-caption" data-i18n="hero.preview_caption">Beispiel-Ansicht – dein echtes Ergebnis erscheint nach dem Scan</span>
         <div class="scorecard-preview">
           <div class="scorecard-header">
-            <span>Compliance Score</span>
+            <span data-i18n="hero.compliance_score">Compliance Score</span>
             <span class="badge-live">LIVE</span>
           </div>
           <div class="score-ring-preview">
@@ -87,14 +105,14 @@
             <div id="hero-score-num" class="score-ring-num">78</div>
           </div>
           <ul id="hero-preview-list" class="preview-list">
-            <li><span class="dot green"></span> Trust &amp; Domain</li>
-            <li><span class="dot yellow"></span> Policy-Seiten</li>
-            <li><span class="dot yellow"></span> Kontakt &amp; Rechtliches</li>
-            <li><span class="dot green"></span> Broken Links</li>
-            <li><span class="dot red"></span> Produkt-Feed</li>
-            <li><span class="dot yellow"></span> Bild-Compliance</li>
-            <li><span class="dot yellow"></span> Bewertungen &amp; Social Proof</li>
-            <li><span class="dot red"></span> Künstliche Dringlichkeit</li>
+            <li><span class="dot green"></span> <span data-i18n="hero.cat.trust">Trust &amp; Domain</span></li>
+            <li><span class="dot yellow"></span> <span data-i18n="hero.cat.policy">Policy-Seiten</span></li>
+            <li><span class="dot yellow"></span> <span data-i18n="hero.cat.contact">Kontakt &amp; Rechtliches</span></li>
+            <li><span class="dot green"></span> <span data-i18n="hero.cat.links">Broken Links</span></li>
+            <li><span class="dot red"></span> <span data-i18n="hero.cat.feed">Produkt-Feed</span></li>
+            <li><span class="dot yellow"></span> <span data-i18n="hero.cat.images">Bild-Compliance</span></li>
+            <li><span class="dot yellow"></span> <span data-i18n="hero.cat.reviews">Bewertungen &amp; Social Proof</span></li>
+            <li><span class="dot red"></span> <span data-i18n="hero.cat.urgency">Künstliche Dringlichkeit</span></li>
           </ul>
         </div>
       </div>
@@ -104,14 +122,14 @@
       <div id="report-loading" class="report-loading" hidden>
         <div class="scan-bar"><div class="scan-bar-fill"></div></div>
         <ul id="loading-steps" class="loading-steps">
-          <li>Trust &amp; Domain prüfen</li>
-          <li>Sitemap crawlen</li>
-          <li>Policy-Seiten suchen</li>
-          <li>Kontaktdaten abgleichen</li>
-          <li>Produkt-Feed lesen</li>
-          <li>Bilder prüfen</li>
-          <li>Bewertungen analysieren</li>
-          <li>Urgency-Muster scannen</li>
+          <li data-i18n="loading.step1">Trust &amp; Domain prüfen</li>
+          <li data-i18n="loading.step2">Sitemap crawlen</li>
+          <li data-i18n="loading.step3">Policy-Seiten suchen</li>
+          <li data-i18n="loading.step4">Kontaktdaten abgleichen</li>
+          <li data-i18n="loading.step5">Produkt-Feed lesen</li>
+          <li data-i18n="loading.step6">Bilder prüfen</li>
+          <li data-i18n="loading.step7">Bewertungen analysieren</li>
+          <li data-i18n="loading.step8">Urgency-Muster scannen</li>
         </ul>
       </div>
       <div id="report-error" class="report-error" hidden></div>
@@ -122,101 +140,101 @@
     <div class="container">
       <span class="section-num">01</span>
       <div class="section-head">
-        <p class="eyebrow">PRÜFBEREICHE</p>
-        <h2>Alles, was Google wirklich prüft</h2>
-        <p class="section-sub">8 Kategorien, ein Scan – über den gesamten Shop, nicht nur die Startseite.</p>
+        <p class="eyebrow" data-i18n="features.eyebrow">PRÜFBEREICHE</p>
+        <h2 data-i18n="features.h2">Alles, was Google wirklich prüft</h2>
+        <p class="section-sub" data-i18n="features.sub">8 Kategorien, ein Scan – über den gesamten Shop, nicht nur die Startseite.</p>
       </div>
       <div class="features">
       <div class="feature-grid">
         <div class="feature-card">
           <div class="feature-icon">🔒</div>
-          <h3>Trust &amp; Domain</h3>
-          <p>Junge Domains sind ein klassisches Dropshipping-Rot-Flag.</p>
+          <h3 data-i18n="feat.trust.title">Trust &amp; Domain</h3>
+          <p data-i18n="feat.trust.desc">Junge Domains sind ein klassisches Dropshipping-Rot-Flag.</p>
           <ul class="feature-list">
-            <li>HTTPS-Verschlüsselung aktiv</li>
-            <li>SSL-Zertifikat gültig + Ablaufdatum</li>
-            <li class="blurred">Domain-Alter per WHOIS-Abfrage</li>
-            <li class="blurred">Erreichbarkeit der Startseite</li>
+            <li data-i18n="feat.trust.li1">HTTPS-Verschlüsselung aktiv</li>
+            <li data-i18n="feat.trust.li2">SSL-Zertifikat gültig + Ablaufdatum</li>
+            <li class="blurred" data-i18n="feat.trust.li3">Domain-Alter per WHOIS-Abfrage</li>
+            <li class="blurred" data-i18n="feat.trust.li4">Erreichbarkeit der Startseite</li>
           </ul>
         </div>
         <div class="feature-card">
           <div class="feature-icon">🔗</div>
-          <h3>Broken Links</h3>
-          <p>Der komplette Shop wird über die Sitemap gecrawlt, nicht nur die Startseite.</p>
+          <h3 data-i18n="feat.links.title">Broken Links</h3>
+          <p data-i18n="feat.links.desc">Der komplette Shop wird über die Sitemap gecrawlt, nicht nur die Startseite.</p>
           <ul class="feature-list">
-            <li>Sitemap.xml wird ausgelesen</li>
-            <li>Alle gefundenen Seiten geprüft, nichts übersprungen</li>
-            <li class="blurred">Produkt- &amp; Kollektionsseiten inklusive</li>
-            <li class="blurred">Erkennung von Bot-Schutz/403-Blockaden</li>
+            <li data-i18n="feat.links.li1">Sitemap.xml wird ausgelesen</li>
+            <li data-i18n="feat.links.li2">Alle gefundenen Seiten geprüft, nichts übersprungen</li>
+            <li class="blurred" data-i18n="feat.links.li3">Produkt- &amp; Kollektionsseiten inklusive</li>
+            <li class="blurred" data-i18n="feat.links.li4">Erkennung von Bot-Schutz/403-Blockaden</li>
           </ul>
         </div>
         <div class="feature-card">
           <div class="feature-icon">📄</div>
-          <h3>Policy-Seiten</h3>
-          <p>Häufigster GMC-Ablehnungsgrund überhaupt.</p>
+          <h3 data-i18n="feat.policy.title">Policy-Seiten</h3>
+          <p data-i18n="feat.policy.desc">Häufigster GMC-Ablehnungsgrund überhaupt.</p>
           <ul class="feature-list">
-            <li>Impressum / Legal Notice</li>
-            <li>Datenschutzerklärung</li>
-            <li class="blurred">AGB / Terms of Service</li>
-            <li class="blurred">Widerrufsrecht / Rückgaberecht</li>
-            <li class="blurred">Versandinformationen</li>
-            <li class="blurred">Kontaktseite</li>
+            <li data-i18n="feat.policy.li1">Impressum / Legal Notice</li>
+            <li data-i18n="feat.policy.li2">Datenschutzerklärung</li>
+            <li class="blurred" data-i18n="feat.policy.li3">AGB / Terms of Service</li>
+            <li class="blurred" data-i18n="feat.policy.li4">Widerrufsrecht / Rückgaberecht</li>
+            <li class="blurred" data-i18n="feat.policy.li5">Versandinformationen</li>
+            <li class="blurred" data-i18n="feat.policy.li6">Kontaktseite</li>
           </ul>
         </div>
         <div class="feature-card">
           <div class="feature-icon">☎️</div>
-          <h3>Kontakt &amp; Rechtliches</h3>
-          <p>Direkt aus der internen GMC-Master-Checklist übernommen.</p>
+          <h3 data-i18n="feat.contact.title">Kontakt &amp; Rechtliches</h3>
+          <p data-i18n="feat.contact.desc">Direkt aus der internen GMC-Master-Checklist übernommen.</p>
           <ul class="feature-list">
-            <li>Geschäftliche E-Mail statt Gmail/GMX</li>
-            <li>Telefonnummer sichtbar</li>
-            <li class="blurred">NAP-Konsistenz über alle Seiten</li>
-            <li class="blurred">Platzhalter-/Lorem-Ipsum-Reste</li>
-            <li class="blurred">Erratbare Standard-URLs auf 404 geprüft</li>
+            <li data-i18n="feat.contact.li1">Geschäftliche E-Mail statt Gmail/GMX</li>
+            <li data-i18n="feat.contact.li2">Telefonnummer sichtbar</li>
+            <li class="blurred" data-i18n="feat.contact.li3">NAP-Konsistenz über alle Seiten</li>
+            <li class="blurred" data-i18n="feat.contact.li4">Platzhalter-/Lorem-Ipsum-Reste</li>
+            <li class="blurred" data-i18n="feat.contact.li5">Erratbare Standard-URLs auf 404 geprüft</li>
           </ul>
         </div>
         <div class="feature-card">
           <div class="feature-icon">📦</div>
-          <h3>Produkt-Feed</h3>
-          <p>Was GMC beim Produktdaten-Import tatsächlich ablehnt.</p>
+          <h3 data-i18n="feat.feed.title">Produkt-Feed</h3>
+          <p data-i18n="feat.feed.desc">Was GMC beim Produktdaten-Import tatsächlich ablehnt.</p>
           <ul class="feature-list">
-            <li>GTIN/Barcode je Variante</li>
-            <li>Markenfeld (Vendor)</li>
-            <li class="blurred">Gültiger, konsistenter Preis</li>
-            <li class="blurred">Eindeutige SKUs (Duplikat-Check)</li>
-            <li class="blurred">Streichpreis-Plausibilität</li>
-            <li class="blurred">"Gebraucht/Refurbished"-Wortlaut</li>
-            <li class="blurred">Leere Kollektionen im Hauptmenü</li>
+            <li data-i18n="feat.feed.li1">GTIN/Barcode je Variante</li>
+            <li data-i18n="feat.feed.li2">Markenfeld (Vendor)</li>
+            <li class="blurred" data-i18n="feat.feed.li3">Gültiger, konsistenter Preis</li>
+            <li class="blurred" data-i18n="feat.feed.li4">Eindeutige SKUs (Duplikat-Check)</li>
+            <li class="blurred" data-i18n="feat.feed.li5">Streichpreis-Plausibilität</li>
+            <li class="blurred" data-i18n="feat.feed.li6">"Gebraucht/Refurbished"-Wortlaut</li>
+            <li class="blurred" data-i18n="feat.feed.li7">Leere Kollektionen im Hauptmenü</li>
           </ul>
         </div>
         <div class="feature-card">
           <div class="feature-icon">🖼️</div>
-          <h3>Bild-Compliance</h3>
-          <p>Nach den von Google empfohlenen Mindestanforderungen.</p>
+          <h3 data-i18n="feat.images.title">Bild-Compliance</h3>
+          <p data-i18n="feat.images.desc">Nach den von Google empfohlenen Mindestanforderungen.</p>
           <ul class="feature-list">
-            <li>Erreichbarkeit jedes Produktbilds</li>
-            <li>Mindestauflösung (800px empfohlen)</li>
-            <li class="blurred">Bis zu 15 Bilder pro Scan geprüft</li>
+            <li data-i18n="feat.images.li1">Erreichbarkeit jedes Produktbilds</li>
+            <li data-i18n="feat.images.li2">Mindestauflösung (800px empfohlen)</li>
+            <li class="blurred" data-i18n="feat.images.li3">Bis zu 15 Bilder pro Scan geprüft</li>
           </ul>
         </div>
         <div class="feature-card">
           <div class="feature-icon">⭐</div>
-          <h3>Bewertungen &amp; Social Proof</h3>
-          <p>Erkennt, ob Bewertungen über Dritte verifizierbar sind.</p>
+          <h3 data-i18n="feat.reviews.title">Bewertungen &amp; Social Proof</h3>
+          <p data-i18n="feat.reviews.desc">Erkennt, ob Bewertungen über Dritte verifizierbar sind.</p>
           <ul class="feature-list">
-            <li>12+ bekannte Bewertungsplattformen</li>
-            <li>Rating-Claims ohne Plattform-Nachweis</li>
-            <li class="blurred">Duplizierte Reviews über Produkte hinweg</li>
+            <li data-i18n="feat.reviews.li1">12+ bekannte Bewertungsplattformen</li>
+            <li data-i18n="feat.reviews.li2">Rating-Claims ohne Plattform-Nachweis</li>
+            <li class="blurred" data-i18n="feat.reviews.li3">Duplizierte Reviews über Produkte hinweg</li>
           </ul>
         </div>
         <div class="feature-card">
           <div class="feature-icon">⏳</div>
-          <h3>Künstliche Dringlichkeit</h3>
-          <p>Vorgetäuschte Knappheit verstößt gegen Googles Misrepresentation-Richtlinie.</p>
+          <h3 data-i18n="feat.urgency.title">Künstliche Dringlichkeit</h3>
+          <p data-i18n="feat.urgency.desc">Vorgetäuschte Knappheit verstößt gegen Googles Misrepresentation-Richtlinie.</p>
           <ul class="feature-list">
-            <li>Countdown-/Verknappungs-Apps</li>
-            <li>Text-Muster wie "nur noch X verfügbar"</li>
-            <li class="blurred">Abgleich mit echtem Lagerbestand-Tracking</li>
+            <li data-i18n="feat.urgency.li1">Countdown-/Verknappungs-Apps</li>
+            <li data-i18n="feat.urgency.li2">Text-Muster wie "nur noch X verfügbar"</li>
+            <li class="blurred" data-i18n="feat.urgency.li3">Abgleich mit echtem Lagerbestand-Tracking</li>
           </ul>
         </div>
       </div>
@@ -227,25 +245,67 @@
     <section class="band" id="how">
     <div class="container how">
       <span class="section-num">02</span>
-      <p class="eyebrow" style="text-align:center">SO FUNKTIONIERT'S</p>
-      <h2 class="section-title">Drei Schritte. Das war's.</h2>
+      <p class="eyebrow" style="text-align:center" data-i18n="how.eyebrow">SO FUNKTIONIERT'S</p>
+      <h2 class="section-title" data-i18n="how.h2">Drei Schritte. Das war's.</h2>
       <div class="how-steps">
         <div class="how-step">
           <div class="how-circle">1</div>
-          <h3>URL eingeben</h3>
-          <p>Trag die Domain deines Shops ein – keine Anmeldung, kein Zugriff auf dein Backend nötig.</p>
+          <h3 data-i18n="how.step1.title">URL eingeben</h3>
+          <p data-i18n="how.step1.desc">Trag die Domain deines Shops ein – keine Anmeldung, kein Zugriff auf dein Backend nötig.</p>
         </div>
         <div class="how-line"></div>
         <div class="how-step">
           <div class="how-circle">2</div>
-          <h3>Automatisch prüfen</h3>
-          <p>Der Scan läuft live und komplett kostenlos – keine Zahlung, keine Kreditkarte nötig.</p>
+          <h3 data-i18n="how.step2.title">Automatisch prüfen</h3>
+          <p data-i18n="how.step2.desc">Der Scan läuft live und komplett kostenlos – keine Zahlung, keine Kreditkarte nötig.</p>
         </div>
         <div class="how-line"></div>
         <div class="how-step">
           <div class="how-circle">3</div>
-          <h3>Report erhalten</h3>
-          <p>Score, Ampel-Bewertung pro Kategorie und konkrete To-Dos – direkt auf der Seite.</p>
+          <h3 data-i18n="how.step3.title">Report erhalten</h3>
+          <p data-i18n="how.step3.desc">Score, Ampel-Bewertung pro Kategorie und konkrete To-Dos – direkt auf der Seite.</p>
+        </div>
+      </div>
+    </div>
+    </section>
+
+    <section class="band" id="pricing">
+    <div class="container">
+      <div class="section-head" style="padding-top:0;">
+        <p class="eyebrow" data-i18n="pricing.eyebrow">PREISE</p>
+        <h2 data-i18n="pricing.h2">Zahl nur, wenn du mehr scannen willst</h2>
+        <p class="section-sub" data-i18n="pricing.sub">Der erste Scan ist immer kostenlos. Danach lohnen sich unsere Scan-Pakete.</p>
+      </div>
+      <p id="package-notice" class="package-notice" hidden></p>
+      <div class="pricing-grid">
+        <div class="pricing-card">
+          <p class="pricing-tier" data-i18n="pricing.free.tier">1 SCAN</p>
+          <p class="pricing-amount">0&nbsp;€</p>
+          <p class="pricing-per" data-i18n="pricing.free.per">Dein erster Scan</p>
+          <p class="pricing-desc" data-i18n="pricing.free.desc">Für jede neue Store-Domain komplett kostenlos – ganz ohne Zahlungsdaten.</p>
+          <a href="#hero" class="pricing-cta pricing-cta-outline" data-i18n="pricing.free.cta">Jetzt kostenlos scannen</a>
+        </div>
+        <div class="pricing-card">
+          <p class="pricing-tier" data-i18n="pricing.p2.tier">2 SCANS</p>
+          <p class="pricing-amount">10&nbsp;€</p>
+          <p class="pricing-per" data-i18n="pricing.p2.per">5&nbsp;€ pro Scan</p>
+          <p class="pricing-desc" data-i18n="pricing.p2.desc">Ideal, um einen Fix direkt gegenzuprüfen.</p>
+          <button type="button" class="pricing-cta" data-package="2" data-i18n="pricing.cta_choose">Paket wählen</button>
+        </div>
+        <div class="pricing-card pricing-card-highlight">
+          <span class="pricing-badge" data-i18n="pricing.badge_popular">Beliebt</span>
+          <p class="pricing-tier" data-i18n="pricing.p5.tier">5 SCANS</p>
+          <p class="pricing-amount">20&nbsp;€</p>
+          <p class="pricing-per" data-i18n="pricing.p5.per">4&nbsp;€ pro Scan</p>
+          <p class="pricing-desc" data-i18n="pricing.p5.desc">Für mehrere Stores oder Shops mit laufenden Anpassungen.</p>
+          <button type="button" class="pricing-cta pricing-cta-solid" data-package="5" data-i18n="pricing.cta_choose">Paket wählen</button>
+        </div>
+        <div class="pricing-card">
+          <p class="pricing-tier" data-i18n="pricing.p10.tier">10 SCANS</p>
+          <p class="pricing-amount">35&nbsp;€</p>
+          <p class="pricing-per" data-i18n="pricing.p10.per">3,50&nbsp;€ pro Scan</p>
+          <p class="pricing-desc" data-i18n="pricing.p10.desc">Bester Preis pro Scan – für Agenturen und mehrere Shops.</p>
+          <button type="button" class="pricing-cta" data-package="10" data-i18n="pricing.cta_choose">Paket wählen</button>
         </div>
       </div>
     </div>
@@ -254,37 +314,37 @@
     <section class="band band-alt" id="why">
     <div class="container why">
       <span class="section-num">03</span>
-      <h2 class="section-title">Warum GMCApprove.ai</h2>
+      <h2 class="section-title" data-i18n="why.h2">Warum GMCApprove</h2>
       <div class="why-grid">
         <div class="why-card">
           <div class="feature-icon">🛡️</div>
-          <h3>Risiken vor Google erkennen</h3>
-          <p>Findet Compliance-Probleme, bevor Google Merchant Center deinen Account sperrt.</p>
+          <h3 data-i18n="why.card1.title">Risiken vor Google erkennen</h3>
+          <p data-i18n="why.card1.desc">Findet Compliance-Probleme, bevor Google Merchant Center deinen Account sperrt.</p>
         </div>
         <div class="why-card">
           <div class="feature-icon">⚡</div>
-          <h3>Gründlich statt schnell-schnell</h3>
-          <p>Alle gefundenen Seiten, bis zu 25 Produkte und 18 Produktseiten pro Scan – mit Wiederholungsversuchen statt Fehlalarmen.</p>
+          <h3 data-i18n="why.card2.title">Gründlich statt schnell-schnell</h3>
+          <p data-i18n="why.card2.desc">Alle gefundenen Seiten, bis zu 25 Produkte und 18 Produktseiten pro Scan – mit Wiederholungsversuchen statt Fehlalarmen.</p>
         </div>
         <div class="why-card">
           <div class="feature-icon">🗺️</div>
-          <h3>Ganzer Shop, nicht nur Startseite</h3>
-          <p>Scan läuft über die Sitemap – Produkt- und Kollektionsseiten inklusive.</p>
+          <h3 data-i18n="why.card3.title">Ganzer Shop, nicht nur Startseite</h3>
+          <p data-i18n="why.card3.desc">Scan läuft über die Sitemap – Produkt- und Kollektionsseiten inklusive.</p>
         </div>
         <div class="why-card">
           <div class="feature-icon">📊</div>
-          <h3>Reale Ablehnungsgründe</h3>
-          <p>Basiert auf den häufigsten tatsächlichen GMC-Ablehnungsgründen, nicht auf Vermutungen.</p>
+          <h3 data-i18n="why.card4.title">Reale Ablehnungsgründe</h3>
+          <p data-i18n="why.card4.desc">Basiert auf den häufigsten tatsächlichen GMC-Ablehnungsgründen, nicht auf Vermutungen.</p>
         </div>
         <div class="why-card">
           <div class="feature-icon">🔒</div>
-          <h3>Keine Anmeldung</h3>
-          <p>Kein Zugriff auf dein Backend, keine dauerhafte Speicherung der Scan-Ergebnisse.</p>
+          <h3 data-i18n="why.card5.title">Keine Anmeldung</h3>
+          <p data-i18n="why.card5.desc">Kein Zugriff auf dein Backend, keine dauerhafte Speicherung der Scan-Ergebnisse.</p>
         </div>
         <div class="why-card">
           <div class="feature-icon">🎯</div>
-          <h3>Für E-Commerce gebaut</h3>
-          <p>Entwickelt für Shopify-Stores und Dropshipping-Teams, die ihr Ads-Budget schützen wollen.</p>
+          <h3 data-i18n="why.card6.title">Für E-Commerce gebaut</h3>
+          <p data-i18n="why.card6.desc">Entwickelt für Shopify-Stores und Dropshipping-Teams, die ihr Ads-Budget schützen wollen.</p>
         </div>
       </div>
     </div>
@@ -292,23 +352,25 @@
 
     <section class="final-cta container">
       <div class="final-cta-panel">
-        <h2>Bereit für deinen Compliance-Check?</h2>
-        <p>Trag deine Shop-URL ein und erhalte einen gründlichen Report in wenigen Minuten.</p>
-        <a href="#hero" class="cta-button">Jetzt scannen</a>
+        <h2 data-i18n="cta.h2">Bereit für deinen Compliance-Check?</h2>
+        <p data-i18n="cta.p">Trag deine Shop-URL ein und erhalte einen gründlichen Report in wenigen Minuten.</p>
+        <a href="#hero" class="cta-button" data-i18n="cta.button">Jetzt scannen</a>
       </div>
     </section>
   </main>
 
   <footer class="footer">
     <div class="container">
-      <p>© <span id="year"></span> GMCApprove.ai. Kein offizielles Google-Produkt, keine Haftung für Entscheidungen des Google Merchant Center.</p>
-      <p class="footer-credit">Ein Produkt von Ecom Germany</p>
+      <p><span data-i18n="footer.copyright_pre">©</span> <span id="year"></span> GMCApprove. <span data-i18n="footer.copyright_post">Kein offizielles Google-Produkt, keine Haftung für Entscheidungen des Google Merchant Center.</span></p>
+      <p class="footer-credit" data-i18n="footer.credit">Ein Produkt von Ecom Germany</p>
     </div>
   </footer>
 
   <script>
     window.__PENDING_SESSION_ID__ = {{ pending_session_id | tojson }};
+    window.__INITIAL_LANG__ = {{ initial_lang | tojson }};
   </script>
+  <script src="/static/js/i18n.js?v={{ asset_v }}"></script>
   <script src="/static/js/app.js?v={{ asset_v }}"></script>
 </body>
 </html>

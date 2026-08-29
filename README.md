@@ -3,8 +3,13 @@
 Landingpage + echter, live laufender Scanner, der einen Shopify-Store (oder
 generisch jede Website) gegen die wichtigsten Google-Merchant-Center-Regeln
 prüft. Der erste Scan pro Store-Domain ist kostenlos, jeder weitere Scan
-derselben Domain kostet (Stripe Checkout). Ohne gesetzte Stripe-Keys läuft
-der Scanner komplett kostenlos (Testmodus).
+läuft über eines von drei Scan-Paketen (Stripe Checkout). Ohne gesetzte
+Stripe-Keys läuft der Scanner komplett kostenlos (Testmodus).
+
+Komplett zweisprachig (DE/EN): Sprache wird automatisch aus der
+Browser-/Gerätesprache erkannt (`app/static/js/i18n.js`), lässt sich per
+Toggle im Header umschalten und wird serverseitig bis in den generierten
+Scan-Report hinein durchgereicht (`app/i18n.py`).
 
 Die Checks sind gegen die interne "GMC Master Checklist" abgeglichen (die
 Kategorien A-H davon, soweit ohne GMC-Login automatisiert prüfbar).
@@ -30,17 +35,20 @@ ein Reload nicht doppelt berechnet).
 Rabatt-Banner, tatsächliche Feed-Ablehnungsgründe aus dem Merchant Center).
 Der Score ist eine fundierte Risiko-Einschätzung, keine Garantie.
 
-## Bezahlung & Promo-Code
+## Bezahlung & Scan-Pakete
 
 - **Erster Scan pro Domain gratis:** Wurde eine Store-Domain noch nie gescannt,
   läuft der Scan direkt und kostenlos, mit einem Hinweisbanner im Report.
-  Erst der zweite Scan derselben Domain (egal von wem) verlangt Bezahlung.
   Die Zuordnung läuft ohne Cookie/Login beim Besucher, wird aber auf einer
   **Render Persistent Disk** gespeichert (`STATS_FILE`, Standard
   `/var/data/stats.json`) – sonst könnte man die Regel durch einen einfachen
   Server-Neustart/Redeploy aushebeln. Ohne gemountete Disk (z.B. lokale
   Entwicklung) läuft es automatisch als reiner In-Memory-Fallback weiter.
-- Checkout läuft über **Stripe Checkout** (einmaliger Kauf, 10&nbsp;€).
+- **Jeder weitere Scan** wird über eines von drei **Scan-Paketen** bezahlt:
+  2 Scans für 10&nbsp;€, 5 Scans für 20&nbsp;€, 10 Scans für 35&nbsp;€
+  (Checkout über **Stripe Checkout**, einmaliger Kauf). Das gekaufte Guthaben
+  wird über einen zufälligen, in `localStorage` gespeicherten **Käufer-Token**
+  verfolgt (kein Login) und gilt domainübergreifend, bis es aufgebraucht ist.
 - `allow_promotion_codes=True` ist aktiviert → jeder Nutzer kann im
   Stripe-Checkout ein Rabattcode-Feld sehen und einlösen.
 - Für dich als Owner gibt es zusätzlich einen **direkten Bypass ohne
@@ -51,8 +59,10 @@ Der Score ist eine fundierte Risiko-Einschätzung, keine Garantie.
 ### Stripe einrichten (einmalig)
 
 1. Account auf https://dashboard.stripe.com anlegen (falls noch nicht vorhanden).
-2. **Product Catalog → + Add product**: Name "GMC Compliance Scan", Preis
-   10,00&nbsp;€, "One time". Die erzeugte `price_...`-ID kopieren.
+2. **Product Catalog → + Add product**: Name "GMC Compliance Scan", dann
+   drei **Preise** dafür anlegen ("One time"): 10,00&nbsp;€ (2 Scans),
+   20,00&nbsp;€ (5 Scans), 35,00&nbsp;€ (10 Scans). Die drei erzeugten
+   `price_...`-IDs kopieren.
 3. **Developers → API keys**: `Secret key` (sk_live_... bzw. sk_test_... zum
    Testen) und `Publishable key` kopieren.
 4. Optional: **Product Catalog → Coupons** → neuen Coupon mit **100% off**
@@ -62,7 +72,7 @@ Der Score ist eine fundierte Risiko-Einschätzung, keine Garantie.
 5. Werte in `.env` eintragen (siehe `.env.example`):
    - `STRIPE_SECRET_KEY`
    - `STRIPE_PUBLISHABLE_KEY`
-   - `STRIPE_PRICE_ID`
+   - `STRIPE_PRICE_ID_PACK2`, `STRIPE_PRICE_ID_PACK5`, `STRIPE_PRICE_ID_PACK10`
    - `APP_BASE_URL` (die öffentliche URL deiner App, z.B. `https://gmc-compliance-scanner.onrender.com`)
    - `OWNER_BYPASS_CODE` (ein selbst gewähltes Geheimnis, NICHT das gleiche wie ein Stripe-Coupon-Code)
    - `APP_SECRET` (beliebiger zufälliger String)

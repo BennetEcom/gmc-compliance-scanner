@@ -1,4 +1,9 @@
 document.getElementById("year").textContent = new Date().getFullYear();
+applyLang(getLang());
+
+document.querySelectorAll("[data-lang-btn]").forEach((btn) => {
+  btn.addEventListener("click", () => setLang(btn.getAttribute("data-lang-btn")));
+});
 
 document.addEventListener("click", (e) => {
   const box = e.target.closest(".checklist-box");
@@ -10,6 +15,7 @@ document.addEventListener("click", (e) => {
 const form = document.getElementById("scan-form");
 const btn = document.getElementById("scan-btn");
 const errBox = document.getElementById("form-error");
+const packageNotice = document.getElementById("package-notice");
 
 const reportSection = document.getElementById("report-section");
 const reportLoading = document.getElementById("report-loading");
@@ -22,7 +28,7 @@ function showError(msg) {
 }
 
 function severityLabel(sev) {
-  return { critical: "Kritisch", high: "Hoch", medium: "Mittel", low: "Niedrig", info: "Info" }[sev] || sev;
+  return tUI(`sev.${sev}`) || sev;
 }
 
 function statusColor(status) {
@@ -152,7 +158,7 @@ function renderReport(result) {
         </li>`
         )
         .join("")
-    : `<li class="finding"><span class="sev-badge sev-info">Info</span><span class="finding-body"><strong>Keine offenen Punkte gefunden</strong>Alle geprüften Bereiche sind unauffällig.</span></li>`;
+    : `<li class="finding"><span class="sev-badge sev-info">${tUI("sev.info")}</span><span class="finding-body"><strong>${tUI("report.no_issues_title")}</strong>${tUI("report.no_issues_desc")}</span></li>`;
 
   const checklistHtml = allIssues.length
     ? allIssues
@@ -164,12 +170,12 @@ function renderReport(result) {
         </li>`
         )
         .join("")
-    : `<li class="checklist-item"><span class="checklist-box checked"></span><span class="checklist-text">Keine offenen Punkte – nichts abzuhaken.</span></li>`;
+    : `<li class="checklist-item"><span class="checklist-box checked"></span><span class="checklist-text">${tUI("report.no_checklist")}</span></li>`;
 
   reportContent.innerHTML = `
     ${notice}
     <div class="report-header">
-      <h2>Compliance Report</h2>
+      <h2>${tUI("report.title")}</h2>
       <div class="url">${result.url}</div>
       <div class="report-ring">
         <svg viewBox="0 0 120 120">
@@ -184,13 +190,13 @@ function renderReport(result) {
     </div>
     <div class="category-grid">${categoriesHtml}</div>
     <div class="issue-summary">
-      <h2>Alle offenen Punkte auf einen Blick (${allIssues.length})</h2>
-      <p class="issue-summary-sub">Genau das musst du auf deiner Seite anpassen, sortiert nach Dringlichkeit.</p>
+      <h2>${tUI("report.issues_heading")} (${allIssues.length})</h2>
+      <p class="issue-summary-sub">${tUI("report.issues_sub")}</p>
       <ul class="findings-list issue-summary-list">${issuesHtml}</ul>
     </div>
     <div class="issue-checklist">
-      <h2>Checkliste zum Abarbeiten</h2>
-      <p class="issue-summary-sub">Zum Abhaken, während du deinen Shop korrigierst.</p>
+      <h2>${tUI("report.checklist_heading")}</h2>
+      <p class="issue-summary-sub">${tUI("report.checklist_sub")}</p>
       <ul class="checklist">${checklistHtml}</ul>
     </div>
   `;
@@ -223,30 +229,75 @@ async function pollScanResult(sessionId) {
     const resp = await fetch(`/api/scan/result?session_id=${encodeURIComponent(sessionId)}`);
     if (!resp.ok) {
       const data = await resp.json().catch(() => ({}));
-      throw new Error(data.detail || "Zahlung konnte nicht verifiziert werden.");
+      throw new Error(data.detail || tUI("err.payment_unverified"));
     }
     const result = await resp.json();
     await waitForMinDuration(started);
     renderReport(result);
   } catch (e) {
-    showReportError(e.message || "Unbekannter Fehler beim Laden des Reports.");
+    showReportError(e.message || tUI("err.unknown_report"));
   }
 }
+
+function showPackageNotice(storeUrl) {
+  stopLoadingAnimation();
+  reportSection.hidden = true;
+  packageNotice.textContent = tUI("package.notice");
+  packageNotice.hidden = false;
+  document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+document.querySelectorAll("[data-package]").forEach((pkgBtn) => {
+  pkgBtn.addEventListener("click", async () => {
+    const url = document.getElementById("store-url").value.trim();
+    if (!url) {
+      document.getElementById("hero")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      showError(tUI("err.empty_url"));
+      return;
+    }
+    const originalText = pkgBtn.textContent;
+    pkgBtn.disabled = true;
+    pkgBtn.textContent = tUI("btn.checking");
+    try {
+      const resp = await fetch("/api/buy-package", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url,
+          package: pkgBtn.getAttribute("data-package"),
+          buyer_token: getBuyerToken(),
+          lang: getLang(),
+        }),
+      });
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data.detail || tUI("err.package_checkout"));
+      }
+      const data = await resp.json();
+      window.location.href = data.checkout_url;
+    } catch (e) {
+      showError(e.message || tUI("err.package_checkout"));
+      pkgBtn.disabled = false;
+      pkgBtn.textContent = originalText;
+    }
+  });
+});
 
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   errBox.hidden = true;
+  packageNotice.hidden = true;
 
   const url = document.getElementById("store-url").value.trim();
 
   if (!url) {
-    showError("Bitte gib die URL deines Shops ein.");
+    showError(tUI("err.empty_url"));
     return;
   }
 
   const originalBtnText = btn.textContent;
   btn.disabled = true;
-  btn.textContent = "Wird geprüft...";
+  btn.textContent = tUI("btn.checking");
   const scanStarted = Date.now();
   showLoading();
 
@@ -254,12 +305,12 @@ form.addEventListener("submit", async (e) => {
     const resp = await fetch("/api/start-scan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url, buyer_token: getBuyerToken(), lang: getLang() }),
     });
 
     if (!resp.ok) {
       const data = await resp.json().catch(() => ({}));
-      throw new Error(data.detail || "Fehler beim Starten des Scans.");
+      throw new Error(data.detail || tUI("err.start_scan"));
     }
 
     const data = await resp.json();
@@ -269,12 +320,17 @@ form.addEventListener("submit", async (e) => {
       return;
     }
 
+    if (data.mode === "choose_package") {
+      showPackageNotice(url);
+      return;
+    }
+
     if (data.mode === "direct") {
       await waitForMinDuration(scanStarted);
       renderReport(data.result);
     }
   } catch (e) {
-    showError(e.message || "Unbekannter Fehler.");
+    showError(e.message || tUI("err.unknown"));
   } finally {
     btn.disabled = false;
     btn.textContent = originalBtnText;
