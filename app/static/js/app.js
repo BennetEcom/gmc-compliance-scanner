@@ -265,7 +265,6 @@ document.querySelectorAll("[data-package]").forEach((pkgBtn) => {
         body: JSON.stringify({
           url,
           package: pkgBtn.getAttribute("data-package"),
-          buyer_token: getBuyerToken(),
           lang: getLang(),
         }),
       });
@@ -305,7 +304,7 @@ form.addEventListener("submit", async (e) => {
     const resp = await fetch("/api/start-scan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, buyer_token: getBuyerToken(), lang: getLang() }),
+      body: JSON.stringify({ url, lang: getLang() }),
     });
 
     if (!resp.ok) {

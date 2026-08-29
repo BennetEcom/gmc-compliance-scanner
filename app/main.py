@@ -47,12 +47,13 @@ def _asset_version(*paths: str) -> str:
 
 ASSET_VERSION = _asset_version("app/static/css/style.css", "app/static/js/app.js")
 
-# Zähler + "schon gescannt"-Liste + Scan-Guthaben pro Käufer-Token (kein
-# Tracking von Besucher:innen, keine IPs/Cookies, kein Login). Wird auf einer
-# Render Persistent Disk gespeichert (falls gemountet), damit die "erster
-# Scan pro Domain gratis"-Regel und gekauftes Guthaben Deploys/Neustarts
-# überstehen. Ohne gemountete Disk (z.B. lokal) läuft es automatisch im
-# reinen In-Memory-Fallback weiter.
+# Zähler + "schon gescannt"-Liste + Scan-Guthaben pro Domain (kein Tracking
+# von Besucher:innen, keine IPs/Cookies, kein Login). Ein gekauftes Paket gilt
+# nur für die Domain, für die es gekauft wurde. Wird auf einer Render
+# Persistent Disk gespeichert (falls gemountet), damit die "erster Scan pro
+# Domain gratis"-Regel und gekauftes Guthaben Deploys/Neustarts überstehen.
+# Ohne gemountete Disk (z.B. lokal) läuft es automatisch im reinen
+# In-Memory-Fallback weiter.
 STATS_FILE = os.getenv("STATS_FILE", "/var/data/stats.json")
 
 
@@ -95,14 +96,12 @@ _stats = _load_stats()
 class StartScanRequest(BaseModel):
     url: str
     promo_owner_code: Optional[str] = None
-    buyer_token: Optional[str] = None
     lang: str = "de"
 
 
 class BuyPackageRequest(BaseModel):
     url: str
     package: str
-    buyer_token: str
     lang: str = "de"
 
 
@@ -158,12 +157,12 @@ async def api_start_scan(payload: StartScanRequest):
         _save_stats()
         return {"mode": "direct", "result": result}
 
-    # 4) Domain wurde bereits gescannt -> vorhandenes Guthaben verbrauchen,
-    #    sonst zur Paket-Auswahl auffordern
-    credits = _stats["credits"].get(payload.buyer_token or "", 0)
+    # 4) Domain wurde bereits gescannt -> vorhandenes Guthaben DIESER Domain
+    #    verbrauchen, sonst zur Paket-Auswahl auffordern
+    credits = _stats["credits"].get(normalized, 0)
     if credits > 0:
         result = await run_scan(normalized, lang)
-        _stats["credits"][payload.buyer_token] = credits - 1
+        _stats["credits"][normalized] = credits - 1
         _stats["scans_completed"] += 1
         _stats["scanned_domains"].append(normalized)
         _save_stats()
@@ -186,7 +185,7 @@ async def api_buy_package(payload: BuyPackageRequest):
         raise HTTPException(status_code=400, detail="Ungültige URL")
 
     lang = resolve_lang(payload.lang)
-    session = create_package_checkout_session(normalized, payload.package, payload.buyer_token, lang)
+    session = create_package_checkout_session(normalized, payload.package, lang)
     return {"mode": "redirect", **session}
 
 
@@ -217,9 +216,9 @@ async def api_scan_result(session_id: str):
 
     result = await run_scan(paid.store_url, paid.lang)
     remaining_credits = paid.scans_granted - 1
-    if paid.buyer_token and remaining_credits > 0:
-        _stats["credits"][paid.buyer_token] = _stats["credits"].get(paid.buyer_token, 0) + remaining_credits
-        result["_notice"] = t("notice.package_bought", paid.lang, remaining=_stats["credits"][paid.buyer_token])
+    if remaining_credits > 0:
+        _stats["credits"][paid.store_url] = _stats["credits"].get(paid.store_url, 0) + remaining_credits
+        result["_notice"] = t("notice.package_bought", paid.lang, remaining=_stats["credits"][paid.store_url])
     cache_result(session_id, result)
     _stats["scans_completed"] += 1
     _stats["scanned_domains"].append(paid.store_url)
@@ -246,7 +245,7 @@ async def api_stats(code: str = ""):
         **{k: v for k, v in _stats.items() if k not in ("scanned_domains", "credits")},
         "unique_domains_scanned": len(set(domains)),
         "most_recent_domains": recent,
-        "buyers_with_credit": len([1 for c in _stats["credits"].values() if c > 0]),
+        "domains_with_credit": len([1 for c in _stats["credits"].values() if c > 0]),
         "note": "Wird auf einer Render Persistent Disk gespeichert (falls gemountet) und übersteht damit Deploys/Neustarts.",
     }
 

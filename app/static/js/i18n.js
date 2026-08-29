@@ -129,12 +129,18 @@ const I18N = {
   "pricing.p2.desc": { de: "Ideal, um einen Fix direkt gegenzuprüfen.", en: "Ideal for verifying a fix right away." },
   "pricing.p5.tier": { de: "5 SCANS", en: "5 SCANS" },
   "pricing.p5.per": { de: "4&nbsp;€ pro Scan", en: "€4 per scan" },
+  "pricing.p5.save": { de: "-20% ggü. Einzelpreis", en: "-20% vs. single price" },
   "pricing.p5.desc": { de: "Für mehrere Stores oder Shops mit laufenden Anpassungen.", en: "For multiple stores or shops with ongoing changes." },
   "pricing.p10.tier": { de: "10 SCANS", en: "10 SCANS" },
   "pricing.p10.per": { de: "3,50&nbsp;€ pro Scan", en: "€3.50 per scan" },
+  "pricing.p10.save": { de: "-30% ggü. Einzelpreis", en: "-30% vs. single price" },
   "pricing.p10.desc": { de: "Bester Preis pro Scan – für Agenturen und mehrere Shops.", en: "Best price per scan – for agencies and multiple shops." },
   "pricing.cta_choose": { de: "Paket wählen", en: "Choose package" },
   "pricing.badge_popular": { de: "Beliebt", en: "Popular" },
+  "pricing.footnote": {
+    de: "Ein gekauftes Paket gilt nur für die gescannte Domain, nicht domainübergreifend.",
+    en: "A purchased package applies only to the scanned domain, not across domains.",
+  },
 
   "why.h2": { de: "Warum GMCApprove", en: "Why GMCApprove" },
   "why.card1.title": { de: "Risiken vor Google erkennen", en: "Spot risks before Google does" },
@@ -230,17 +236,4 @@ function applyLang(lang) {
   });
   const titleEntry = I18N["meta.title"];
   if (titleEntry) document.title = titleEntry[lang] || titleEntry.de;
-}
-
-function getBuyerToken() {
-  try {
-    let token = localStorage.getItem("gmc_buyer_token");
-    if (!token) {
-      token = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
-      localStorage.setItem("gmc_buyer_token", token);
-    }
-    return token;
-  } catch (e) {
-    return "";
-  }
 }

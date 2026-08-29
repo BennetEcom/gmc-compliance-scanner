@@ -3,15 +3,18 @@ Stripe-Checkout für GMC-Compliance-Scan-Pakete.
 
 Ablauf:
   1. Erster Scan pro Domain ist immer kostenlos (siehe main.py).
-  2. Jeder weitere Scan verlangt entweder vorhandenes Scan-Guthaben
-     (siehe main.py: _stats["credits"][buyer_token]) oder den Kauf eines
-     Pakets (2/5/10 Scans) über Stripe Checkout.
-  3. Store-URL, Sprache, Käufer-Token und Anzahl gekaufter Scans werden als
-     Metadata an die Checkout Session gehängt.
+  2. Jeder weitere Scan verlangt entweder vorhandenes Scan-Guthaben für GENAU
+     DIESE Domain (siehe main.py: _stats["credits"][store_url]) oder den Kauf
+     eines Pakets (2/5/10 Scans) über Stripe Checkout. Ein gekauftes Paket
+     gilt bewusst nur für die Domain, für die es gekauft wurde, nicht
+     domainübergreifend.
+  3. Store-URL, Sprache und Anzahl gekaufter Scans werden als Metadata an die
+     Checkout Session gehängt.
   4. Nach erfolgreicher Zahlung leitet Stripe zurück auf
      /scan/result?session_id=... -> wir verifizieren payment_status == 'paid'
      (oder amount_total == 0 bei 100%-Rabatt), führen DANN den ersten Scan
-     des Pakets aus und schreiben die restlichen Scans als Guthaben gut.
+     des Pakets aus und schreiben die restlichen Scans als Guthaben für diese
+     Domain gut.
 
 In-Memory Cache verhindert doppelten Scan/Mehrfachnutzung derselben Session.
 """
@@ -34,9 +37,7 @@ def is_stripe_configured() -> bool:
     return bool(STRIPE_SECRET_KEY) and all(p["price_id"] for p in SCAN_PACKAGES.values())
 
 
-def create_package_checkout_session(
-    store_url: str, package: str, buyer_token: str, lang: str = DEFAULT_LANG
-) -> dict:
+def create_package_checkout_session(store_url: str, package: str, lang: str = DEFAULT_LANG) -> dict:
     pkg = SCAN_PACKAGES[package]
     session = stripe.checkout.Session.create(
         mode="payment",
@@ -47,7 +48,6 @@ def create_package_checkout_session(
         metadata={
             "store_url": store_url,
             "lang": lang,
-            "buyer_token": buyer_token,
             "scans_granted": str(pkg["scans"]),
         },
     )
@@ -57,26 +57,20 @@ def create_package_checkout_session(
 class PaidSession(NamedTuple):
     store_url: Optional[str]
     lang: str
-    buyer_token: Optional[str]
     scans_granted: int
 
 
 def verify_paid_session(session_id: str) -> PaidSession:
-    """Liest Store-URL, Sprache, Käufer-Token und gekaufte Scan-Anzahl aus der
-    Session, wenn sie bezahlt (oder durch 100%-Promo-Code auf 0 reduziert)
-    wurde. store_url ist None, wenn (noch) nicht bezahlt."""
+    """Liest Store-URL, Sprache und gekaufte Scan-Anzahl aus der Session, wenn
+    sie bezahlt (oder durch 100%-Promo-Code auf 0 reduziert) wurde. store_url
+    ist None, wenn (noch) nicht bezahlt."""
     session = stripe.checkout.Session.retrieve(session_id)
     meta = session.metadata or {}
     lang = resolve_lang(meta.get("lang"))
     paid_or_free = session.payment_status in ("paid", "no_payment_required")
     if not paid_or_free:
-        return PaidSession(None, lang, None, 0)
-    return PaidSession(
-        meta.get("store_url"),
-        lang,
-        meta.get("buyer_token"),
-        int(meta.get("scans_granted", 1)),
-    )
+        return PaidSession(None, lang, 0)
+    return PaidSession(meta.get("store_url"), lang, int(meta.get("scans_granted", 1)))
 
 
 def cache_result(session_id: str, result: dict) -> None:

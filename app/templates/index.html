@@ -288,7 +288,7 @@
         <div class="pricing-card">
           <p class="pricing-tier" data-i18n="pricing.p2.tier">2 SCANS</p>
           <p class="pricing-amount">10&nbsp;€</p>
-          <p class="pricing-per" data-i18n="pricing.p2.per">5&nbsp;€ pro Scan</p>
+          <p class="pricing-per" data-i18n-html="pricing.p2.per">5&nbsp;€ pro Scan</p>
           <p class="pricing-desc" data-i18n="pricing.p2.desc">Ideal, um einen Fix direkt gegenzuprüfen.</p>
           <button type="button" class="pricing-cta" data-package="2" data-i18n="pricing.cta_choose">Paket wählen</button>
         </div>
@@ -296,18 +296,25 @@
           <span class="pricing-badge" data-i18n="pricing.badge_popular">Beliebt</span>
           <p class="pricing-tier" data-i18n="pricing.p5.tier">5 SCANS</p>
           <p class="pricing-amount">20&nbsp;€</p>
-          <p class="pricing-per" data-i18n="pricing.p5.per">4&nbsp;€ pro Scan</p>
+          <p class="pricing-per">
+            <span data-i18n-html="pricing.p5.per">4&nbsp;€ pro Scan</span>
+            <span class="pricing-save" data-i18n="pricing.p5.save">-20%</span>
+          </p>
           <p class="pricing-desc" data-i18n="pricing.p5.desc">Für mehrere Stores oder Shops mit laufenden Anpassungen.</p>
           <button type="button" class="pricing-cta pricing-cta-solid" data-package="5" data-i18n="pricing.cta_choose">Paket wählen</button>
         </div>
         <div class="pricing-card">
           <p class="pricing-tier" data-i18n="pricing.p10.tier">10 SCANS</p>
           <p class="pricing-amount">35&nbsp;€</p>
-          <p class="pricing-per" data-i18n="pricing.p10.per">3,50&nbsp;€ pro Scan</p>
+          <p class="pricing-per">
+            <span data-i18n-html="pricing.p10.per">3,50&nbsp;€ pro Scan</span>
+            <span class="pricing-save" data-i18n="pricing.p10.save">-30%</span>
+          </p>
           <p class="pricing-desc" data-i18n="pricing.p10.desc">Bester Preis pro Scan – für Agenturen und mehrere Shops.</p>
           <button type="button" class="pricing-cta" data-package="10" data-i18n="pricing.cta_choose">Paket wählen</button>
         </div>
       </div>
+      <p class="pricing-footnote" data-i18n="pricing.footnote">Ein gekauftes Paket gilt nur für die gescannte Domain, nicht domainübergreifend.</p>
     </div>
     </section>
 
