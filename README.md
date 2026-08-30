@@ -12,24 +12,19 @@ Toggle im Header umschalten und wird serverseitig bis in den generierten
 Scan-Report hinein durchgereicht (`app/i18n.py`).
 
 Die Checks sind gegen die interne "GMC Master Checklist" abgeglichen (die
-Kategorien A-H sowie G2 davon, soweit ohne GMC-Login automatisiert prüfbar).
-Die Kategorien I (Merchant-Center-intern) und J (Betreiber-Selbstauskunft)
-lassen sich von außen prinzipiell nicht prüfen – sie werden im Report
-ausdrücklich als nicht geprüft ausgewiesen statt stillschweigend weggelassen.
+Kategorien A-H davon, soweit ohne GMC-Login automatisiert prüfbar).
 
 ## Was der Scanner wirklich prüft
 
 1. **Trust & Domain** – HTTPS, SSL-Zertifikat-Gültigkeit, Domain-Alter (WHOIS)
 2. **Broken Links** – nicht nur die Startseite: Seiten werden zuerst über die Shopify-Sitemap (`sitemap.xml`) gesammelt (Fallback: Homepage-Links + `products.json`) und dann auf Fehlerstatus geprüft
-3. **Policy-Seiten** – Impressum, Datenschutz, AGB, Widerruf, Versand, Kontakt, Über uns, FAQ, Zahlungsbedingungen, Sendungsverfolgung (häufigster GMC-Ablehnungsgrund). Geprüft wird nicht nur, ob die Seite existiert, sondern ob sie Inhalt hat und die Pflichtangaben trägt: Lieferzeit/Bearbeitungsdauer, Versandkosten, Sendungsverfolgung, Rückgabefrist, wer die Rücksendung zahlt, Ablauf der Erstattung, Rückgabefälle, Rechtsform + Anschrift, Zahlungsarten – und ob auf jeder Policy-Seite Kontaktdaten stehen
-4. **Kontakt & Rechtliches** – geschäftliche E-Mail statt Gmail/GMX, sichtbare Telefonnummer, vollständige Adresse (Straße + Hausnummer, PLZ, Ort), NAP-Konsistenz über E-Mail, `tel:`-Nummern und Postleitzahlen hinweg, mindestens zwei Kontaktwege plus Servicezeiten auf ein und derselben Kontaktseite, E-Mail-Adressen mit angehängtem Satzpunkt (`info@shop.de.`), `mailto:`/`tel:`-Klickbarkeit, Platzhalter-/Lorem-Ipsum-Reste, erratbare Standard-URLs (`/pages/contact-us` etc.), die nicht auf 404 enden dürfen
-5. **Produkt-Feed-Qualität** – liest Shopifys öffentliches `/products.json` aus und prüft GTIN/Barcode (inklusive Prüfziffer, damit Fantasie-Barcodes auffallen), Marke, Preis, Beschreibungslänge, eindeutige SKUs, Streichpreis-Plausibilität (Compare-at > Preis), "gebraucht/refurbished"-Wortlaut, Farb-/Größen-Variantenattribute (daraus leitet Google `color` und `size` im Feed ab), Hinweise auf `gender`/`age_group`, komplett ausverkaufte Produkte, die weiterhin online stehen, fehlende Produktkategorie, Titel-zu-URL-Abweichungen, ™/®-Zeichen, doppelte Beschreibungen, Script-/iframe-Code in Beschreibungen, nicht belegbare Wirkversprechen, ungesicherte Edelfaser-Angaben (Kaschmir, Merino, Seide …) sowie leere/fast leere Kollektionen, die im Hauptmenü verlinkt sind
-6. **Bild-Compliance** – prüft, ob Produktbilder erreichbar sind und die von Google empfohlene Mindestauflösung erfüllen, ob dasselbe Bild auf mehreren Produkten liegt, ob jedes Produkt mindestens drei Bilder hat, wie schwer die Dateien sind (Mobile-PageSpeed) und ob Bilder direkt von einem Lieferanten-CDN wie AliExpress geladen werden
+3. **Policy-Seiten** – Impressum, Datenschutz, AGB, Widerruf, Versand, Kontakt (häufigster GMC-Ablehnungsgrund)
+4. **Kontakt & Rechtliches** – geschäftliche E-Mail statt Gmail/GMX, sichtbare Telefonnummer, NAP-Konsistenz (identische Kontaktdaten über alle Seiten), Platzhalter-/Lorem-Ipsum-Reste, erratbare Standard-URLs (`/pages/contact-us` etc.), die nicht auf 404 enden dürfen
+5. **Produkt-Feed-Qualität** – liest Shopifys öffentliches `/products.json` aus und prüft GTIN/Barcode, Marke, Preis, Beschreibungslänge, eindeutige SKUs, Streichpreis-Plausibilität (Compare-at > Preis), "gebraucht/refurbished"-Wortlaut sowie leere/fast leere Kollektionen, die im Hauptmenü verlinkt sind
+6. **Bild-Compliance** – prüft, ob Produktbilder erreichbar sind und die von Google empfohlene Mindestauflösung erfüllen
 7. **Bewertungen & Social Proof** – erkennt bekannte Bewertungsplattformen (Trustpilot, Judge.me, Loox, Yotpo, …); fehlt eine solche trotz angezeigter Sternebewertungen, oder tauchen identische Rezensionstexte auf mehreren Produktseiten auf, wird das als nicht verifizierbar/möglich gefälscht markiert
 8. **Künstliche Dringlichkeit ("Fake Urgency")** – sucht nach Countdown-/Verknappungs-Apps und Formulierungen wie "nur noch X auf Lager"; wenn Shopify für die geprüften Produkte gar keinen Lagerbestand trackt, können solche Angaben nicht real sein (Verstoß gegen Googles Misrepresentation-Richtlinie)
-9. **Trust-Red-Flags** – Kategorie E der Checkliste: gefälschte Sicherheits-/Garantie-Siegel, "Bekannt aus"- und Partner-/Händler-Claims ohne Beleg, Popup- und Glücksrad-Apps sowie "Bestseller"/"Kundenliebling"-Auszeichnungen, für die es mangels Bewertungsplattform gar keine Datenbasis geben kann
-10. **Technik & Google-Signale** – `google-site-verification` im `<head>` (ohne bestätigte Domain keine GMC-Freigabe), aussagekräftiger Startseiten-Titel, sichtbare Theme-Fehler ("Liquid error", "translation missing"), Footer auf wirklich jeder Seite (inklusive Policy- und Rückgabeseiten) und der Abgleich der schema.org-Strukturdaten gegen die tatsächlichen Shop-Daten: weicht der Preis oder die Verfügbarkeit im Markup vom Shop ab, ist das der klassische Auslöser für "automatische Artikel-Updates" und daraus folgende Sperren
-11. **Page Speed** – misst Ladezeit und HTML-Größe der Startseite direkt beim Scan (kein externer API-Key nötig). Liefert keine echten Lighthouse-Werte wie LCP/CLS, aber eine grobe, sofort verfügbare Einschätzung der Ladegeschwindigkeit
+9. **Page Speed** – misst Ladezeit und HTML-Größe der Startseite direkt beim Scan (kein externer API-Key nötig). Liefert keine echten Lighthouse-Werte wie LCP/CLS, aber eine grobe, sofort verfügbare Einschätzung der Ladegeschwindigkeit
 
 Alles läuft live pro Anfrage, es werden keine Scan-Ergebnisse dauerhaft
 gespeichert (nur ein kurzlebiger In-Memory-Cache pro Zahlungs-Session, damit
@@ -42,31 +37,18 @@ Der Score ist eine fundierte Risiko-Einschätzung, keine Garantie.
 
 ## Bezahlung & Scan-Pakete
 
-- **Genau ein kostenloser Scan pro Store-Domain:** Wurde eine Domain noch nie
-  gescannt, läuft dieser eine Scan direkt und kostenlos, mit einem
-  Hinweisbanner im Report. Danach ist jeder weitere Scan derselben Domain
-  kostenpflichtig.
-- **Was als „eine Domain" zählt:** `domain_key()` in `app/scanner.py` reduziert
-  die Eingabe auf den reinen Host – klein geschrieben, ohne Schema, ohne
-  Standard-Port, ohne führendes `www.`. `https://shop.de`, `http://shop.de`,
-  `https://www.shop.de` und `https://shop.de:443` sind damit **ein** Store und
-  nicht vier Gratis-Scans. Subdomains bleiben bewusst eigenständig, weil dort
-  in der Regel ein anderer Shop liegt.
-- Die Zuordnung läuft ohne Cookie/Login beim Besucher, wird aber auf einer
+- **Erster Scan pro Domain gratis:** Wurde eine Store-Domain noch nie gescannt,
+  läuft der Scan direkt und kostenlos, mit einem Hinweisbanner im Report.
+  Die Zuordnung läuft ohne Cookie/Login beim Besucher, wird aber auf einer
   **Render Persistent Disk** gespeichert (`STATS_FILE`, Standard
   `/var/data/stats.json`) – sonst könnte man die Regel durch einen einfachen
   Server-Neustart/Redeploy aushebeln. Ohne gemountete Disk (z.B. lokale
-  Entwicklung) läuft es als reiner In-Memory-Fallback weiter; dort überlebt
-  die Sperre einen Neustart also nicht.
+  Entwicklung) läuft es automatisch als reiner In-Memory-Fallback weiter.
 - **Jeder weitere Scan** wird über eines von drei **Scan-Paketen** bezahlt:
   2 Scans für 10&nbsp;€, 5 Scans für 20&nbsp;€, 10 Scans für 35&nbsp;€
-  (Checkout über **Stripe Checkout**, einmaliger Kauf). Das Guthaben liegt
-  serverseitig unter demselben Domain-Schlüssel wie die Gratis-Scan-Sperre und
-  gilt deshalb **nur für die Domain, für die es gekauft wurde**.
-- **Ist Stripe nicht konfiguriert**, wird ein kostenpflichtiger Scan mit
-  HTTP 503 und einer erklärenden Meldung abgelehnt – nicht verschenkt. Eine
-  fehlende Umgebungsvariable soll nicht stillschweigend zum Gratis-Modus für
-  alle werden.
+  (Checkout über **Stripe Checkout**, einmaliger Kauf). Das gekaufte Guthaben
+  wird über einen zufälligen, in `localStorage` gespeicherten **Käufer-Token**
+  verfolgt (kein Login) und gilt domainübergreifend, bis es aufgebraucht ist.
 - `allow_promotion_codes=True` ist aktiviert → jeder Nutzer kann im
   Stripe-Checkout ein Rabattcode-Feld sehen und einlösen.
 - Für dich als Owner gibt es zusätzlich einen **direkten Bypass ohne

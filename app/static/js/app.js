@@ -100,19 +100,6 @@ function stopLoadingAnimation() {
   document.querySelectorAll("#loading-steps li").forEach((el) => el.classList.remove("active"));
 }
 
-// Findings enthalten Text aus dem gescannten Shop (Review-Ausschnitte, URLs,
-// Produkttitel) und aus unseren eigenen Meldungen, in denen Tag-Namen wie
-// <title> vorkommen. Beides landet per innerHTML im DOM: ohne Escaping
-// oeffnet ein solcher String ein echtes Element - <title> und <iframe>
-// verschlucken dabei den gesamten Rest des Reports - und ein praeparierter
-// Shop koennte eigenes Markup einschleusen.
-function esc(value) {
-  return String(value == null ? "" : value).replace(
-    /[&<>"']/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
-  );
-}
-
 function renderReport(result) {
   stopLoadingAnimation();
   updateHeroPreview(result);
@@ -133,14 +120,14 @@ function renderReport(result) {
           (f) => `
         <li class="finding">
           <span class="sev-badge sev-${f.severity}">${severityLabel(f.severity)}</span>
-          <span class="finding-body"><strong>${esc(f.title)}</strong>${esc(f.detail)}</span>
+          <span class="finding-body"><strong>${f.title}</strong>${f.detail}</span>
         </li>`
         )
         .join("");
       return `
       <div class="category-card">
         <div class="category-card-header">
-          <div class="category-title"><span class="dot ${color}"></span> ${esc(cat.label)}</div>
+          <div class="category-title"><span class="dot ${color}"></span> ${cat.label}</div>
           <div class="category-score">${cat.score}/100</div>
         </div>
         <div class="bar-track"><div class="bar-fill ${color}" style="width:${cat.score}%"></div></div>
@@ -167,7 +154,7 @@ function renderReport(result) {
           (f) => `
         <li class="finding">
           <span class="sev-badge sev-${f.severity}">${severityLabel(f.severity)}</span>
-          <span class="finding-body"><strong>${esc(f.title)}</strong><span class="finding-category">${esc(f.categoryLabel)}</span>${esc(f.detail)}</span>
+          <span class="finding-body"><strong>${f.title}</strong><span class="finding-category">${f.categoryLabel}</span>${f.detail}</span>
         </li>`
         )
         .join("")
@@ -179,7 +166,7 @@ function renderReport(result) {
           (f) => `
         <li class="checklist-item">
           <span class="checklist-box"></span>
-          <span class="checklist-text">${esc(f.title)} <span class="checklist-cat">– ${esc(f.categoryLabel)}</span></span>
+          <span class="checklist-text">${f.title} <span class="checklist-cat">– ${f.categoryLabel}</span></span>
         </li>`
         )
         .join("")
@@ -189,7 +176,7 @@ function renderReport(result) {
     ${notice}
     <div class="report-header">
       <h2>${tUI("report.title")}</h2>
-      <div class="url">${esc(result.url)}</div>
+      <div class="url">${result.url}</div>
       <div class="report-ring">
         <svg viewBox="0 0 120 120">
           <circle cx="60" cy="60" r="52" class="ring-bg" />
@@ -198,7 +185,7 @@ function renderReport(result) {
         <div class="report-ring-num">${result.overall_score}</div>
       </div>
       <div class="overall-score">
-        <div class="risk ${riskClass(result.overall_score)}">${esc(result.risk_label)}</div>
+        <div class="risk ${riskClass(result.overall_score)}">${result.risk_label}</div>
       </div>
     </div>
     <div class="category-grid">${categoriesHtml}</div>
@@ -252,17 +239,9 @@ async function pollScanResult(sessionId) {
   }
 }
 
-// Blendet Ladeanzeige und Report-Bereich aus. Wird gebraucht, sobald ein
-// angestossener Scan doch nicht zu einem Report fuehrt - sonst laeuft der
-// Fortschrittsbalken neben der Fehlermeldung einfach weiter.
-function resetReportView() {
+function showPackageNotice(storeUrl) {
   stopLoadingAnimation();
   reportSection.hidden = true;
-  reportLoading.hidden = true;
-}
-
-function showPackageNotice(storeUrl) {
-  resetReportView();
   packageNotice.textContent = tUI("package.notice");
   packageNotice.hidden = false;
   document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -329,21 +308,8 @@ modalConfirm.addEventListener("click", async () => {
   await buyPackage(url, pkg, pkgBtn);
 });
 
-// Der Rahmen wandert auf das zuletzt angeklickte Paket. Wichtig fuer den
-// Fall, dass danach der Domain-Dialog aufgeht: dort muss erkennbar bleiben,
-// welches Paket gerade gekauft wird.
-function selectPackageCard(pkgBtn) {
-  const card = pkgBtn.closest(".pricing-card");
-  if (!card) return;
-  document
-    .querySelectorAll(".pricing-card.is-selected")
-    .forEach((el) => el.classList.remove("is-selected"));
-  card.classList.add("is-selected");
-}
-
 document.querySelectorAll("[data-package]").forEach((pkgBtn) => {
   pkgBtn.addEventListener("click", () => {
-    selectPackageCard(pkgBtn);
     const url = document.getElementById("store-url").value.trim();
     if (url) {
       buyPackage(url, pkgBtn.getAttribute("data-package"), pkgBtn);
@@ -400,7 +366,6 @@ form.addEventListener("submit", async (e) => {
       renderReport(data.result);
     }
   } catch (e) {
-    resetReportView();
     showError(e.message || tUI("err.unknown"));
   } finally {
     btn.disabled = false;
