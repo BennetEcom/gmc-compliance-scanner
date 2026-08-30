@@ -341,11 +341,38 @@ h1 {
   display: flex;
   flex-direction: column;
   align-items: center;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 .pricing-card-highlight {
   border-color: var(--blue);
   box-shadow: 0 20px 44px -22px rgba(47,111,235,0.45);
   transform: translateY(-6px);
+}
+
+/* Hover: die Karte leuchtet blau auf, damit erkennbar ist, dass hier etwas
+   zu waehlen ist. Gleiche Bildsprache wie die hervorgehobene Karte, nur als
+   weicher Ring statt als fester Rahmen - sonst waere im Hover nicht mehr zu
+   unterscheiden, welches Paket empfohlen ist.
+   hover: hover schliesst Touch-Geraete aus, wo der Zustand sonst nach einem
+   Tippen kleben bleibt. */
+@media (hover: hover) {
+  .pricing-card:hover {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 4px rgba(47,111,235,0.20), 0 20px 44px -18px rgba(47,111,235,0.55);
+    transform: translateY(-5px);
+  }
+  /* Auch der Button zieht mit an, damit klar ist, wo der Klick hingehoert.
+     Die gefuellte Variante bleibt unangetastet - sie ist schon blau. */
+  .pricing-card:hover .pricing-cta:not(.pricing-cta-solid) {
+    border-color: var(--blue);
+    color: var(--blue-dark);
+  }
+  /* Muss nach der Regel oben stehen: die hervorgehobene Karte liegt bereits
+     6px hoeher und wuerde im Hover sonst nach unten springen. */
+  .pricing-card-highlight:hover {
+    box-shadow: 0 0 0 4px rgba(47,111,235,0.18), 0 24px 48px -20px rgba(47,111,235,0.55);
+    transform: translateY(-10px);
+  }
 }
 .pricing-badge {
   position: absolute;
