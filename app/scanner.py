@@ -9,13 +9,28 @@ soweit ohne GMC-Login automatisiert prüfbar):
 
 1. Trust & Domain-Metriken (SSL, Domain-Alter, Erreichbarkeit)
 2. Broken Links (über die gesamte per Sitemap erkannte Seite, nicht nur die Startseite)
-3. Policy-Seiten (Impressum, Datenschutz, AGB, Widerruf, Versand, Kontakt)
-4. Kontakt & Rechtliches (geschäftliche E-Mail, Telefon, NAP-Konsistenz, Platzhalter-Content, Standard-URLs)
-5. Produkt-Feed-Qualität (GTIN/Brand/Preis/SKU/Streichpreis/Condition via Shopify products.json, leere Nav-Kollektionen)
-6. Bild-Compliance (Auflösung, Alt-Text, erreichbar)
+3. Policy-Seiten (Impressum, Datenschutz, AGB, Widerruf, Versand, Kontakt, Über uns,
+   FAQ, Zahlungsarten, Sendungsverfolgung) - inklusive Inhaltsprüfung: eine leere
+   oder unvollständige Pflichtseite zählt wie eine fehlende
+4. Kontakt & Rechtliches (geschäftliche E-Mail, Telefon, vollständige Adresse,
+   NAP-Konsistenz über E-Mail/Telefon/PLZ, Kontaktwege + Servicezeiten auf einer
+   Seite, Platzhalter-Content, Standard-URLs, Klickbarkeit)
+5. Produkt-Feed-Qualität (GTIN inkl. Prüfziffer, Brand, Preis, SKU, Streichpreis,
+   Condition, Farb-/Größen-Variantenattribute, Verfügbarkeit, Produktkategorie,
+   Wirkversprechen, Materialangaben, doppelte Beschreibungen, leere Nav-Kollektionen)
+6. Bild-Compliance (Auflösung, erreichbar, Dubletten, Anzahl pro Produkt, Gewicht,
+   Lieferanten-CDN)
 7. Bewertungen & Social Proof (verifizierbare Plattform vs. nicht nachprüfbare/duplizierte Reviews)
 8. Künstliche Dringlichkeit/Verknappung ("Fake Urgency": Countdown-Apps, "nur noch X"-Behauptungen ohne echten Lagerbestand)
-9. Page Speed (eigene Messung: Ladezeit + HTML-Größe der Startseite, ohne externe API)
+9. Trust-Red-Flags (Fake-Trust-Badges, Presse-/Partner-Claims ohne Beleg, Popup-Apps,
+   Bestseller-Auszeichnungen ohne Datenbasis)
+10. Technik & Google-Signale (Google-Site-Verification, Startseiten-Titel, Theme-Fehler,
+    Footer auf jeder Seite, schema.org-Preis/Verfügbarkeit gegen die Shop-Daten)
+11. Page Speed (eigene Messung: Ladezeit + HTML-Größe der Startseite, ohne externe API)
+
+Nicht prüfbar und deshalb im Report ausdrücklich als solches ausgewiesen: alles, was
+einen Merchant-Center-Login braucht (Kategorie I der Checkliste) sowie die
+Betreiber-Selbstauskunft (Kategorie J).
 
 Kein Login nötig, keine Datenspeicherung – alles läuft pro Request live.
 """
@@ -71,12 +86,20 @@ REQUEST_TIMEOUT = httpx.Timeout(10.0, connect=6.0)
 # das Semaphore garantiert an den tatsächlich laufenden Event-Loop gebunden
 # wird, nicht an einen zur Import-Zeit ggf. noch nicht existierenden.
 _http_concurrency: Optional[asyncio.Semaphore] = None
+_http_concurrency_loop: Optional[asyncio.AbstractEventLoop] = None
 
 
 def _get_http_concurrency() -> asyncio.Semaphore:
-    global _http_concurrency
-    if _http_concurrency is None:
+    """Ein asyncio.Semaphore ist an den Event-Loop gebunden, in dem es zum
+    ersten Mal benutzt wird. Wird der Loop ersetzt - Worker-Neustart, ein
+    Skript mit mehreren asyncio.run()-Aufrufen, Tests - wirft das gecachte
+    Semaphore "attached to a different loop". Deshalb merken wir uns den Loop
+    und legen bei einem Wechsel ein frisches an."""
+    global _http_concurrency, _http_concurrency_loop
+    loop = asyncio.get_running_loop()
+    if _http_concurrency is None or _http_concurrency_loop is not loop:
         _http_concurrency = asyncio.Semaphore(4)
+        _http_concurrency_loop = loop
     return _http_concurrency
 
 # --- Policy-Seiten: Keywords, nach denen wir in Footer-Links & URLs suchen ---
@@ -110,6 +133,28 @@ POLICY_PATTERNS = {
         "label_key": "policy.contact",
         "keywords": ["kontakt", "contact-us", "contact us", "contact"],
         "severity": "high",
+    },
+    # Kategorie C der Master-Checklist verlangt diese Seiten ebenfalls -
+    # sie fehlten bisher komplett und wurden nur als 404-Sonde mitgeprueft.
+    "about": {
+        "label_key": "policy.about",
+        "keywords": ["ueber uns", "über uns", "about-us", "about us", "unsere geschichte", "our story"],
+        "severity": "medium",
+    },
+    "faq": {
+        "label_key": "policy.faq",
+        "keywords": ["faq", "haeufige fragen", "häufige fragen", "fragen und antworten", "hilfe", "help center"],
+        "severity": "medium",
+    },
+    "payment": {
+        "label_key": "policy.payment",
+        "keywords": ["zahlung", "zahlungsarten", "zahlungsbedingungen", "payment-policy", "payment policy", "billing terms"],
+        "severity": "medium",
+    },
+    "track_order": {
+        "label_key": "policy.track_order",
+        "keywords": ["sendungsverfolgung", "bestellung verfolgen", "track-order", "track your order", "track order", "paket verfolgen"],
+        "severity": "low",
     },
 }
 
@@ -210,6 +255,27 @@ def normalize_url(raw: str) -> str:
     if not parsed.netloc:
         raise ValueError("Ungültige URL")
     return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def domain_key(raw: str) -> str:
+    """Kanonischer Schlüssel für "ein Store" – Grundlage für das Bezahl-Gate
+    und für gekauftes Guthaben.
+
+    normalize_url() behält Schema und Port und liefert deshalb für ein und
+    denselben Shop mehrere verschiedene Zeichenketten:
+    https://shop.de, http://shop.de, https://www.shop.de und
+    https://shop.de:443 wären vier Schlüssel – und damit vier Gratis-Scans.
+    Hier bleibt nur der Host übrig: klein geschrieben, ohne Standard-Port,
+    ohne führendes "www." und ohne abschließenden Punkt der DNS-Wurzel.
+    """
+    parsed = urlparse(normalize_url(raw))
+    host = (parsed.hostname or "").lower().rstrip(".")
+    if host.startswith("www."):
+        host = host[4:]
+    port = parsed.port
+    if port and port not in (80, 443):
+        return f"{host}:{port}"
+    return host
 
 
 @dataclass
@@ -525,6 +591,10 @@ async def check_policy_pages(client: httpx.AsyncClient, base_url: str, homepage_
         "refund": ["/policies/refund-policy", "/pages/widerrufsrecht"],
         "shipping": ["/pages/versand", "/pages/shipping"],
         "contact": ["/pages/contact", "/pages/kontakt"],
+        "about": ["/pages/about-us", "/pages/ueber-uns", "/pages/about"],
+        "faq": ["/pages/faq", "/pages/haeufige-fragen", "/pages/help"],
+        "payment": ["/pages/zahlungsarten", "/pages/payment", "/policies/terms-of-sale"],
+        "track_order": ["/pages/sendungsverfolgung", "/pages/track-order", "/apps/track123"],
     }
 
     async def try_guess(key: str):
@@ -555,6 +625,13 @@ async def check_policy_pages(client: httpx.AsyncClient, base_url: str, homepage_
                                      t("policy.missing_detail", lang)))
 
     score = round(100 * (1 - lost_weight / total_weight)) if total_weight else 100
+
+    # Existenz allein reicht nicht: eine leere oder inhaltlich unvollstaendige
+    # Pflichtseite wird von Google wie eine fehlende gewertet (Kategorie C/D).
+    content_findings, content_penalty = await check_policy_content(client, found_urls, lang)
+    findings.extend(content_findings)
+    score -= content_penalty
+
     return CategoryResult("policy_pages", t("cat.policy_pages", lang), max(0, min(100, score)), findings), found_urls
 
 
@@ -567,8 +644,9 @@ async def check_contact_legal(client: httpx.AsyncClient, base_url: str, homepage
 
     # Kontakt-/Rechtsseiten zusätzlich laden (Startseite reicht oft nicht für
     # E-Mail/Telefon/NAP-Konsistenz-Checks).
-    extra_urls = [u for k, u in policy_urls.items() if k in ("contact", "impressum", "privacy")]
-    extra_pages = await fetch_product_pages(client, extra_urls[:3])  # generischer HTML-Fetch, Name passt trotzdem
+    extra_keys = ("contact", "impressum", "privacy", "about", "terms", "shipping")
+    extra_urls = [u for k, u in policy_urls.items() if k in extra_keys]
+    extra_pages = await fetch_product_pages(client, extra_urls[:6])  # generischer HTML-Fetch, Name passt trotzdem
 
     pages_html: dict[str, str] = {"Startseite": homepage_html or ""}
     for url, html in extra_pages:
@@ -639,6 +717,13 @@ async def check_contact_legal(client: httpx.AsyncClient, base_url: str, homepage
             t("contact.dead_ends_detail", lang, listing=listing),
         ))
         score -= min(10, len(dead_ends) * 2)
+
+    # 6) Adresse, Kontaktwege, Servicezeiten, NAP ueber Telefon + PLZ
+    extra_findings, extra_penalty = check_contact_extras(
+        pages_html, policy_urls.get("contact"), lang
+    )
+    findings.extend(extra_findings)
+    score -= extra_penalty
 
     score = max(0, min(100, score))
     return CategoryResult("contact_legal", t("cat.contact_legal", lang), score, findings)
@@ -805,6 +890,12 @@ async def check_product_feed(client: httpx.AsyncClient, base_url: str, homepage_
     if not missing_gtin and not missing_brand and not missing_price and not missing_desc and not duplicate_skus and not inverted_compare_at and not used_wording:
         findings.append(Finding("info", t("feed.sample_ok_title", lang), t("feed.sample_ok_detail", lang, n=n)))
 
+    # Feed-Attribute + Content-Checks aus Kategorie F/G2 (Variantenattribute,
+    # Verfuegbarkeit, Claims, Materialangaben, GTIN-Plausibilitaet ...)
+    extra_findings, extra_penalty = check_feed_extras(products, lang)
+    findings.extend(extra_findings)
+    score -= extra_penalty
+
     collection_findings = await check_nav_collections(client, base_url, homepage_html, lang)
     if collection_findings:
         findings.extend(collection_findings)
@@ -837,6 +928,7 @@ async def check_images(client: httpx.AsyncClient, base_url: str, products_sample
     broken = 0
     too_small = 0
     checked = 0
+    sizes_bytes: list[int] = []
 
     async def check_one(url: str):
         nonlocal broken, too_small, checked
@@ -845,6 +937,7 @@ async def check_images(client: httpx.AsyncClient, base_url: str, products_sample
             broken += 1
             return
         checked += 1
+        sizes_bytes.append(len(resp.content))
         if Image is not None:
             try:
                 img = Image.open(BytesIO(resp.content))
@@ -866,6 +959,11 @@ async def check_images(client: httpx.AsyncClient, base_url: str, products_sample
         score -= min(25, too_small * 5)
     if not broken and not too_small:
         findings.append(Finding("info", t("images.ok_title", lang), t("images.ok_detail", lang, checked=checked)))
+
+    # Dubletten, Bildanzahl pro Produkt, Gewicht, Lieferanten-CDN (Kategorie F)
+    extra_findings, extra_penalty = check_image_extras(products_sample, sizes_bytes, lang)
+    findings.extend(extra_findings)
+    score -= extra_penalty
 
     findings.append(Finding("info", t("images.note_title", lang), t("images.note_detail", lang)))
 
@@ -939,10 +1037,19 @@ async def check_page_speed(client: httpx.AsyncClient, base_url: str, lang: str =
 # ---------------------------------------------------------------------------
 async def fetch_product_pages(client: httpx.AsyncClient, product_urls: list[str]) -> list[tuple[str, str]]:
     pages: list[tuple[str, str]] = []
+    cache: dict[str, str] = getattr(client, "_page_cache", None)
+    if cache is None:
+        cache = {}
+        client._page_cache = cache  # lebt genau einen Scan lang (Client pro run_scan)
 
     async def fetch_one(url: str):
+        cached = cache.get(url)
+        if cached is not None:
+            pages.append((url, cached))
+            return
         resp = await fetch(client, url)
         if not isinstance(resp, Exception) and resp.status_code < 400:
+            cache[url] = resp.text
             pages.append((url, resp.text))
 
     await asyncio.gather(*(fetch_one(u) for u in product_urls))
@@ -1102,20 +1209,36 @@ async def run_scan(raw_url: str, lang: str = DEFAULT_LANG) -> dict:
 
         product_pages = await fetch_product_pages(client, site_urls.get("product_urls", []))
         reviews_res = await check_reviews(homepage_html, product_pages, lang)
-        urgency_res = await check_urgency_patterns(product_pages, products_sample, lang)
+        # Die Startseite gehoert mit in den Urgency-Check: Countdown-Banner und
+        # "Angebot endet in" stehen typischerweise in der Announcement-Bar,
+        # nicht auf der Produktseite.
+        home_page_entry = [(base_url, homepage_html)] if homepage_html else []
+        urgency_res = await check_urgency_patterns(home_page_entry + product_pages, products_sample, lang)
+        reviews_platform_detected = any(
+            f.title == t("reviews.platform_found_title", lang) for f in reviews_res.findings
+        )
+        red_flags_res = await check_red_flags(homepage_html, product_pages, reviews_platform_detected, lang)
+        technical_res = await check_technical(
+            client, base_url, homepage_html, product_pages, products_sample, policy_urls, lang
+        )
 
-    categories = [trust_res, links_res, policy_res, contact_res, feed_res, images_res, reviews_res, urgency_res, speed_res]
+    categories = [
+        trust_res, links_res, policy_res, contact_res, feed_res, images_res,
+        reviews_res, urgency_res, red_flags_res, technical_res, speed_res,
+    ]
 
     weights = {
-        "trust": 0.10,
-        "broken_links": 0.12,
-        "policy_pages": 0.15,
-        "contact_legal": 0.12,
-        "product_feed": 0.15,
-        "images": 0.08,
-        "reviews": 0.09,
-        "urgency": 0.09,
-        "page_speed": 0.10,
+        "trust": 0.08,
+        "broken_links": 0.10,
+        "policy_pages": 0.14,
+        "contact_legal": 0.11,
+        "product_feed": 0.14,
+        "images": 0.07,
+        "reviews": 0.07,
+        "urgency": 0.07,
+        "red_flags": 0.07,
+        "technical": 0.10,
+        "page_speed": 0.05,
     }
     overall = round(sum(c.score * weights[c.key] for c in categories))
 
@@ -1136,3 +1259,880 @@ async def run_scan(raw_url: str, lang: str = DEFAULT_LANG) -> dict:
         "critical_issues": critical_count,
         "categories": [c.to_dict() for c in categories],
     }
+
+
+# ===========================================================================
+# Erweiterung 2026-08 — zusätzliche Prüfpunkte aus der GMC-Master-Checklist
+# ---------------------------------------------------------------------------
+# Bis hierhin prüfte der Scanner überwiegend Existenz (Seite erreichbar?
+# Link tot? GTIN gesetzt?). Die Master-Checkliste bewertet aber vor allem
+# Inhalte: was auf der Versandseite steht, ob die Adresse überall gleich ist,
+# ob das Preis-Markup zum Shop passt. Genau diese Punkte kommen hier dazu.
+# ===========================================================================
+
+_TAG_RE = re.compile(r"<(script|style|noscript)[^>]*>.*?</\1>", re.S | re.I)
+
+
+def visible_text(html: str) -> str:
+    """HTML -> reiner Fließtext (ohne Script-/Style-Inhalte). Bewusst ohne
+    BeautifulSoup-Vollparse, weil das hier auf bis zu 40 Seiten läuft."""
+    if not html:
+        return ""
+    stripped = _TAG_RE.sub(" ", html)
+    text = re.sub(r"<[^>]+>", " ", stripped)
+    text = (text.replace("&nbsp;", " ").replace("&amp;", "&")
+                .replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", '"')
+                .replace("&#39;", "'").replace("&euro;", "€"))
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _listing(items, lang: str, limit: int = 8) -> str:
+    items = list(items)
+    out = "\n".join(f"• {i}" for i in items[:limit])
+    if len(items) > limit:
+        out += more_suffix(len(items) - limit, lang)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# C/D) Policy-Seiten: Inhalt statt nur Existenz
+# ---------------------------------------------------------------------------
+MIN_POLICY_TEXT_CHARS = 350
+
+# Pro Seitentyp: welche Aussagen MÜSSEN im Text vorkommen. Jede Gruppe ist
+# eine Aussage; erfüllt gilt sie, sobald EINES ihrer Muster greift (DE|EN).
+POLICY_CONTENT_REQUIREMENTS: dict[str, list[tuple[str, list[str]]]] = {
+    "shipping": [
+        ("req.shipping_time", [
+            r"liefer(zeit|frist|dauer)", r"versanddauer", r"bearbeitungszeit",
+            r"\d+\s*(?:-|–|bis|to)\s*\d+\s*(?:werktag|arbeitstag|tage|business day|working day|day)",
+            r"delivery time", r"handling time", r"transit time", r"ships? within",
+        ]),
+        ("req.shipping_cost", [
+            r"versandkosten", r"versandkosten\s*frei", r"kostenlose?r?\s+versand",
+            r"shipping (?:cost|rate|fee|charge)", r"free shipping",
+            r"\d+[.,]\d{2}\s*(?:€|\$|eur|usd)", r"(?:€|\$)\s*\d+[.,]\d{2}",
+        ]),
+        ("req.shipping_tracking", [
+            r"sendungsverfolg", r"tracking", r"trackingnummer", r"versandbestätigung",
+            r"versanddienstleister", r"versandpartner", r"carrier", r"shipping partner",
+        ]),
+    ],
+    "refund": [
+        ("req.refund_period", [
+            r"\d{1,3}\s*(?:tage|tagen|kalendertage|werktage|days)", r"innerhalb von \d+",
+            r"within \d+\s*days", r"rückgabefrist", r"return (?:period|window)", r"widerrufsfrist",
+        ]),
+        ("req.refund_who_pays", [
+            r"rücksendekosten", r"rückversandkosten", r"kosten der rücksendung",
+            r"return (?:shipping|postage) (?:cost|fee)", r"wer (?:trägt|zahlt)",
+            r"we (?:cover|pay)", r"trägst? du", r"trägt der käufer", r"at your (?:own )?expense",
+        ]),
+        ("req.refund_process", [
+            r"erstatt", r"rückerstatt", r"gutschrift", r"refund(?:ed)?", r"reimburse",
+            r"ursprüngliche[sn]? zahlungsmittel", r"original payment method",
+        ]),
+        ("req.refund_cases", [
+            r"beschädigt", r"defekt", r"falsche[sn]? (?:artikel|produkt)", r"falsch geliefert",
+            r"damaged", r"defective", r"wrong item", r"change of mind", r"nicht gefallen",
+        ]),
+    ],
+    "impressum": [
+        ("req.legal_entity", [
+            r"\b(?:gmbh|ug|ohg|kg|ag|e\.k\.|einzelunternehmen|ltd|llc|inc\.?|corp)\b",
+            r"vertreten durch", r"inhaber", r"geschäftsführer", r"owner", r"managing director",
+        ]),
+        ("req.legal_address", [r"\b\d{4,5}\s+[A-ZÄÖÜ]", r"\b[A-Z]{2}\s+\d{5}"]),
+    ],
+    "payment": [
+        ("req.payment_methods", [
+            r"paypal", r"kreditkarte", r"credit card", r"visa", r"mastercard",
+            r"klarna", r"sofort", r"apple pay", r"google pay", r"rechnung", r"vorkasse",
+            r"sepa", r"lastschrift", r"amex", r"american express",
+        ]),
+    ],
+}
+
+
+async def check_policy_content(
+    client: httpx.AsyncClient,
+    policy_urls: dict[str, str],
+    lang: str = DEFAULT_LANG,
+) -> tuple[list[Finding], int]:
+    """Lädt die gefundenen Policy-Seiten und prüft, ob dort tatsächlich etwas
+    steht — und zwar das Richtige. Eine leere AGB-Seite besteht sonst jede
+    reine Existenzprüfung, wird von Google aber wie eine fehlende gewertet.
+    Gibt (Findings, Score-Abzug) zurück."""
+    findings: list[Finding] = []
+    penalty = 0
+
+    targets = {k: u for k, u in policy_urls.items() if k in POLICY_CONTENT_REQUIREMENTS or k in ("privacy", "terms", "about", "faq")}
+    if not targets:
+        return findings, 0
+
+    pages = await fetch_product_pages(client, list(targets.values()))
+    html_by_url = dict(pages)
+
+    label_by_key = {
+        "impressum": "policy.impressum", "privacy": "policy.privacy", "terms": "policy.terms",
+        "refund": "policy.refund", "shipping": "policy.shipping", "contact": "policy.contact",
+        "about": "policy.about", "faq": "policy.faq", "payment": "policy.payment",
+        "track_order": "policy.track_order",
+    }
+
+    pages_without_contact: list[str] = []
+
+    for key, url in targets.items():
+        html = html_by_url.get(url)
+        if not html:
+            continue
+        label = t(label_by_key.get(key, "policy.contact"), lang)
+        text = visible_text(html)
+
+        # Shopify rendert Header/Footer mit — der Seitentext allein ist das,
+        # was über den Boilerplate hinausgeht. Grobe, aber stabile Näherung:
+        # alles unter MIN_POLICY_TEXT_CHARS ist auch inkl. Chrome zu dünn.
+        if len(text) < MIN_POLICY_TEXT_CHARS:
+            findings.append(Finding(
+                "high", t("policy.empty_title", lang, label=label, chars=len(text)),
+                t("policy.empty_detail", lang, min_chars=MIN_POLICY_TEXT_CHARS),
+            ))
+            penalty += 12
+            continue
+
+        lower = text.lower()
+        requirements = POLICY_CONTENT_REQUIREMENTS.get(key, [])
+        missing = [
+            t(req_key, lang) for req_key, patterns in requirements
+            if not any(re.search(p, lower, re.I) for p in patterns)
+        ]
+        if missing:
+            findings.append(Finding(
+                "high" if len(missing) > 1 else "medium",
+                t("policy.missing_content_title", lang, label=label, count=len(missing)),
+                t("policy.missing_content_detail", lang, listing=_listing(missing, lang)),
+            ))
+            penalty += min(15, 5 * len(missing))
+        elif requirements:
+            findings.append(Finding(
+                "info", t("policy.content_ok_title", lang, label=label),
+                t("policy.content_ok_detail", lang),
+            ))
+
+        # "Every policy page carries contact + company info" (Kategorie D)
+        if key in ("shipping", "refund", "terms", "privacy") and not (
+            EMAIL_RE.search(text) or "mailto:" in html.lower() or "tel:" in html.lower()
+        ):
+            pages_without_contact.append(url)
+
+    if pages_without_contact:
+        findings.append(Finding(
+            "medium", t("policy.no_contact_on_page_title", lang, count=len(pages_without_contact)),
+            t("policy.no_contact_on_page_detail", lang, listing=_listing(pages_without_contact, lang)),
+        ))
+        penalty += 8
+
+    return findings, penalty
+
+
+# ---------------------------------------------------------------------------
+# B) Kontakt: Adresse, Kontaktwege, Servicezeiten, NAP über Telefon/Adresse
+# ---------------------------------------------------------------------------
+STREET_RE = re.compile(
+    r"([A-ZÄÖÜ][\wäöüßA-Za-z.\-]{2,30}\s*(?:stra(?:ß|ss)e|str\.|weg|allee|platz|gasse|ring|damm|ufer)\s*\d+\s*[a-z]?)"
+    r"|(\b\d{1,5}\s+[A-Z][A-Za-z0-9.\-]{1,25}(?:\s+[A-Z][A-Za-z0-9.\-]{1,25})?\s+"
+    r"(?:street|st\.?|avenue|ave\.?|road|rd\.?|boulevard|blvd\.?|lane|ln\.?|drive|dr\.?|court|ct\.?|way|suite|ste\.?)\b)",
+    re.I,
+)
+POSTAL_RE = re.compile(r"\b(?:[A-Z]{1,2}-)?(\d{4,5})\s+[A-ZÄÖÜ][a-zäöüß]{2,}|\b([A-Z]{2})\s+(\d{5})(?:-\d{4})?\b")
+TEL_LINK_RE = re.compile(r"tel:\s*([+0-9()\s.\-/]{6,})", re.I)
+EMAIL_TRAILING_DOT_RE = re.compile(r"([A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,})\.(?![A-Za-z0-9])")
+SERVICE_HOURS_PATTERNS = [
+    r"(?:mo|mon|montag)[a-zäöü.]*\s*(?:-|–|bis|to|through)\s*(?:fr|fri|freitag|sa|sat|so|sun)",
+    r"\d{1,2}[:.]\d{2}\s*(?:uhr|am|pm|h)\b",
+    r"öffnungszeiten", r"servicezeiten", r"erreichbarkeit", r"business hours", r"support hours",
+    r"antwort(?:zeit)?\s*(?:innerhalb|binnen)", r"(?:reply|respond|response)\s*(?:within|time)",
+    r"innerhalb von \d+\s*(?:stunden|std|werktagen)", r"within \d+\s*(?:hours|business days)",
+]
+
+
+def _normalize_phone(raw: str) -> str:
+    digits = re.sub(r"\D", "", raw)
+    return digits[-9:] if len(digits) >= 9 else digits
+
+
+def check_contact_extras(
+    pages_html: dict[str, str],
+    contact_url: Optional[str],
+    lang: str = DEFAULT_LANG,
+) -> tuple[list[Finding], int]:
+    """Adresse, Kontaktwege, Servicezeiten und NAP-Konsistenz über Telefon +
+    Postleitzahl. Arbeitet auf bereits geladenen Seiten, macht keine eigenen
+    Requests. Gibt (Findings, Score-Abzug) zurück."""
+    findings: list[Finding] = []
+    penalty = 0
+
+    text_by_page = {url: visible_text(html) for url, html in pages_html.items() if html}
+    combined_text = " ".join(text_by_page.values())
+    combined_html = " ".join(h for h in pages_html.values() if h)
+    if not combined_text:
+        return findings, 0
+
+    # 1) Vollständige Adresse (Straße + Hausnummer UND PLZ + Ort)
+    street_hit = STREET_RE.search(combined_text)
+    postal_hits_all = POSTAL_RE.findall(combined_text)
+    if street_hit and postal_hits_all:
+        snippet = next(g for g in street_hit.groups() if g).strip()
+        findings.append(Finding("info", t("contact.address_found_title", lang), snippet[:160]))
+    else:
+        findings.append(Finding(
+            "high", t("contact.no_address_title", lang), t("contact.no_address_detail", lang),
+        ))
+        penalty += 20
+
+    # 2) NAP: dieselbe PLZ auf allen Seiten, die überhaupt eine nennen
+    postal_by_page: dict[str, set[str]] = {}
+    for url, text in text_by_page.items():
+        codes = {m[0] or m[2] for m in POSTAL_RE.findall(text)}
+        codes = {c for c in codes if c}
+        if codes:
+            postal_by_page[url] = codes
+    if len(postal_by_page) >= 2:
+        distinct = set().union(*postal_by_page.values())
+        if len(distinct) > 1:
+            findings.append(Finding(
+                "high", t("contact.address_mismatch_title", lang),
+                t("contact.address_mismatch_detail", lang, listing=_listing(sorted(distinct), lang)),
+            ))
+            penalty += 15
+
+    # 3) NAP: Telefonnummern. Bewusst nur tel:-Links auswerten — freier Text
+    #    liefert zu viele Falschtreffer (Bestellnummern, Datumsangaben, IDs).
+    tel_numbers = {_normalize_phone(m) for m in TEL_LINK_RE.findall(combined_html)}
+    tel_numbers = {n for n in tel_numbers if n}
+    if len(tel_numbers) > 1:
+        findings.append(Finding(
+            "high", t("contact.phone_mismatch_title", lang),
+            t("contact.phone_mismatch_detail", lang, listing=_listing(sorted(tel_numbers), lang)),
+        ))
+        penalty += 15
+
+    # 4) E-Mail mit angehängtem Satzpunkt ("info@shop.com.")
+    # Drei Varianten, weil der Satzpunkt je nach Markup woanders landet:
+    # im Fließtext ("info@x.de."), im rohen HTML (href="mailto:info@x.de.")
+    # und hinter einem schließenden Tag ("<a>info@x.de</a>."). Beim Entfernen
+    # der Tags darf hier - anders als in visible_text() - kein Leerzeichen
+    # eingesetzt werden, sonst geht genau dieser Fall verloren.
+    tagless = re.sub(r"<[^>]+>", "", _TAG_RE.sub(" ", combined_html))
+    trailing = set(EMAIL_TRAILING_DOT_RE.findall(combined_text))
+    trailing |= set(EMAIL_TRAILING_DOT_RE.findall(combined_html))
+    trailing |= set(EMAIL_TRAILING_DOT_RE.findall(tagless))
+    if trailing:
+        findings.append(Finding(
+            "medium", t("contact.trailing_dot_title", lang),
+            t("contact.trailing_dot_detail", lang, emails=", ".join(sorted(trailing))[:200]),
+        ))
+        penalty += 8
+
+    # 5) Klickbarkeit: mailto:/tel: statt reinem Text
+    missing_links = []
+    if EMAIL_RE.search(combined_text) and "mailto:" not in combined_html.lower():
+        missing_links.append("mailto:")
+    if PHONE_RE.search(combined_text) and "tel:" not in combined_html.lower():
+        missing_links.append("tel:")
+    if missing_links:
+        findings.append(Finding(
+            "low", t("contact.not_clickable_title", lang),
+            t("contact.not_clickable_detail", lang, missing=", ".join(missing_links)),
+        ))
+        penalty += 5
+
+    # 6) Kontaktseite: mindestens zwei Kontaktwege + Servicezeiten, beides auf
+    #    EINER Seite (Checklist B: "contact page complete on ONE page")
+    contact_html = pages_html.get(contact_url) if contact_url else None
+    if contact_html:
+        contact_text = visible_text(contact_html)
+        lower_html = contact_html.lower()
+        options = []
+        if EMAIL_RE.search(contact_text) or "mailto:" in lower_html:
+            options.append("E-Mail" if lang == "de" else "Email")
+        if PHONE_RE.search(contact_text) or "tel:" in lower_html:
+            options.append("Telefon" if lang == "de" else "Phone")
+        if "<form" in lower_html and ("textarea" in lower_html or "type=\"email\"" in lower_html):
+            options.append("Formular" if lang == "de" else "Form")
+        if STREET_RE.search(contact_text):
+            options.append("Adresse" if lang == "de" else "Address")
+
+        if len(options) < 2:
+            findings.append(Finding(
+                "medium", t("contact.few_options_title", lang, count=len(options)),
+                t("contact.few_options_detail", lang, found=", ".join(options) or "–"),
+            ))
+            penalty += 10
+        else:
+            findings.append(Finding(
+                "info", t("contact.options_ok_title", lang, count=len(options)),
+                t("contact.options_ok_detail", lang, found=", ".join(options)),
+            ))
+
+        if not any(re.search(p, contact_text, re.I) for p in SERVICE_HOURS_PATTERNS):
+            findings.append(Finding(
+                "medium", t("contact.no_hours_title", lang), t("contact.no_hours_detail", lang),
+            ))
+            penalty += 10
+
+    return findings, penalty
+
+
+# ---------------------------------------------------------------------------
+# F/G2) Produkt-Feed: Variantenattribute, Verfügbarkeit, Claims, GTIN-Plausibilität
+# ---------------------------------------------------------------------------
+COLOR_OPTION_NAMES = {"color", "colour", "farbe", "farben", "farbton"}
+SIZE_OPTION_NAMES = {"size", "größe", "groesse", "grösse", "sizes", "konfektionsgröße"}
+GENDER_HINTS = [
+    "damen", "herren", "unisex", "women", "men", "womens", "mens", "kinder", "kids",
+    "baby", "jungen", "mädchen", "girls", "boys", "female", "male", "adult", "erwachsene",
+]
+TRADEMARK_RE = re.compile(r"[™®©]")
+DESC_SCRIPT_RE = re.compile(r"<\s*(script|iframe)\b", re.I)
+
+UNSUBSTANTIATED_CLAIM_PATTERNS = [
+    r"heilt\b", r"heilung", r"lindert\s+(?:schmerzen|beschwerden)", r"schmerzfrei\b",
+    r"klinisch (?:bewiesen|getestet|erwiesen)", r"clinically (?:proven|tested)",
+    r"wissenschaftlich bewiesen", r"scientifically proven", r"fda[- ]approved",
+    r"garantierte? (?:wirkung|erfolg|ergebnis)", r"guaranteed results?",
+    r"\bcures?\b", r"\btreats?\s+(?:pain|anxiety|acne)", r"100\s*%\s*(?:wirksam|effective)",
+    r"beseitigt (?:falten|cellulite)", r"removes? (?:wrinkles|cellulite)",
+    r"wunder(?:mittel|kur)", r"miracle (?:cure|product)",
+    # "Unverifiable operational claims" (Checklist D, fixlist A3)
+    r"jedes (?:stück|teil|produkt) wird (?:einzeln|von hand|vor dem versand)",
+    r"handgeprüft", r"einzeln (?:geprüft|kontrolliert)", r"quality[- ]checked before",
+    r"in unserer (?:manufaktur|werkstatt)", r"made in our (?:atelier|workshop)",
+]
+
+PREMIUM_MATERIALS = [
+    "kaschmir", "cashmere", "merino", "seide", "silk", "leinen", "linen",
+    "leder", "leather", "alpaka", "alpaca", "daune", "goose down",
+]
+MATERIAL_QUALIFIERS = [
+    "optik", "look", "feel", "haptik", "imitat", "artig", "ähnlich", "style",
+    "-like", "faux", "kunst", "vegan", "alternative", "touch",
+]
+
+MIN_IMAGES_PER_PRODUCT = 3
+SUPPLIER_CDN_SIGNATURES = ["alicdn.com", "aliexpress", "dhgate", "1688.com", "temu", "cjdropshipping"]
+
+
+def _gtin_is_plausible(barcode: str) -> bool:
+    code = re.sub(r"\s|-", "", barcode)
+    if not code.isdigit() or len(code) not in (8, 12, 13, 14):
+        return False
+    if len(set(code)) == 1:  # 0000000000000 & Co.
+        return False
+    digits = [int(c) for c in code]
+    check = digits[-1]
+    body = digits[:-1][::-1]
+    total = sum(d * (3 if i % 2 == 0 else 1) for i, d in enumerate(body))
+    return (10 - total % 10) % 10 == check
+
+
+def check_feed_extras(products: list[dict], lang: str = DEFAULT_LANG) -> tuple[list[Finding], int]:
+    """Feed-Attribute, die Google item-für-item ablehnt, plus die Content-
+    Prüfungen aus Kategorie F. Rein aus products.json, keine Requests."""
+    findings: list[Finding] = []
+    penalty = 0
+    if not products:
+        return findings, 0
+
+    n = len(products)
+    no_variant_attrs = 0
+    sold_out: list[str] = []
+    missing_type = 0
+    handle_mismatch: list[str] = []
+    trademark: list[str] = []
+    scripted = 0
+    claim_hits: set[str] = set()
+    material_hits: set[str] = set()
+    fake_gtins: list[str] = []
+    desc_index: dict[str, list[str]] = {}
+    gender_signal = False
+
+    for p in products:
+        title = (p.get("title") or "").strip()
+        handle = (p.get("handle") or "").strip()
+        options = p.get("options") or []
+        option_names = {(o.get("name") or "").strip().lower() for o in options}
+        variants = p.get("variants") or []
+
+        # Variantenattribute: Google leitet color/size aus den Optionsnamen ab
+        if not (option_names & COLOR_OPTION_NAMES) and not (option_names & SIZE_OPTION_NAMES):
+            no_variant_attrs += 1
+
+        haystack = " ".join([title, p.get("product_type") or "", " ".join(p.get("tags") or [])]).lower()
+        if any(h in haystack for h in GENDER_HINTS):
+            gender_signal = True
+
+        # Verfügbarkeit: komplett ausverkauft, aber weiterhin online
+        if variants and all(v.get("available") is False for v in variants):
+            sold_out.append(title or handle)
+
+        if not (p.get("product_type") or "").strip():
+            missing_type += 1
+
+        # Titel vs. URL-Handle: erste zwei signifikanten Wörter müssen sich
+        # im Handle wiederfinden, sonst stammt die URL noch vom Lieferanten
+        title_words = [w for w in re.findall(r"[a-zäöüß0-9]{4,}", title.lower())][:2]
+        if title_words and handle and not any(w in handle.lower() for w in title_words):
+            handle_mismatch.append(f"{title[:45]} → /products/{handle}")
+
+        if TRADEMARK_RE.search(title):
+            trademark.append(title[:60])
+
+        body = p.get("body_html") or ""
+        if DESC_SCRIPT_RE.search(body):
+            scripted += 1
+
+        desc = visible_text(body)
+        norm = re.sub(r"\W+", "", desc.lower())[:400]
+        if norm:
+            desc_index.setdefault(norm, []).append(title[:45])
+
+        blob = f"{title} {desc}".lower()
+        for pattern in UNSUBSTANTIATED_CLAIM_PATTERNS:
+            m = re.search(pattern, blob, re.I)
+            if m:
+                claim_hits.add(m.group(0).strip())
+        for material in PREMIUM_MATERIALS:
+            for m in re.finditer(rf"\b{re.escape(material)}\b", blob):
+                tail = blob[m.end():m.end() + 14]
+                head = blob[max(0, m.start() - 14):m.start()]
+                if not any(q in tail or q in head for q in MATERIAL_QUALIFIERS):
+                    material_hits.add(material)
+                    break
+
+        for v in variants:
+            barcode = (v.get("barcode") or "").strip()
+            if barcode and not _gtin_is_plausible(barcode):
+                fake_gtins.append(f"{title[:40]}: {barcode}")
+
+    def pct(x):
+        return round(100 * x / n)
+
+    if no_variant_attrs:
+        findings.append(Finding(
+            "high", t("feed.missing_variant_attrs_title", lang, pct=pct(no_variant_attrs)),
+            t("feed.missing_variant_attrs_detail", lang),
+        ))
+        penalty += min(20, no_variant_attrs * 3)
+
+    if not gender_signal:
+        findings.append(Finding(
+            "medium", t("feed.no_gender_hint_title", lang), t("feed.no_gender_hint_detail", lang),
+        ))
+        penalty += 8
+
+    if sold_out:
+        findings.append(Finding(
+            "high", t("feed.unavailable_shown_title", lang, count=len(sold_out)),
+            t("feed.unavailable_shown_detail", lang) + "\n\n" + _listing(sold_out, lang),
+        ))
+        penalty += min(15, len(sold_out) * 4)
+
+    if missing_type:
+        findings.append(Finding(
+            "medium", t("feed.missing_type_title", lang, pct=pct(missing_type)),
+            t("feed.missing_type_detail", lang),
+        ))
+        penalty += min(12, missing_type * 2)
+
+    if handle_mismatch:
+        findings.append(Finding(
+            "low", t("feed.handle_mismatch_title", lang, count=len(handle_mismatch)),
+            t("feed.handle_mismatch_detail", lang, listing=_listing(handle_mismatch, lang)),
+        ))
+        penalty += min(8, len(handle_mismatch) * 2)
+
+    if trademark:
+        findings.append(Finding(
+            "high", t("feed.trademark_title", lang, count=len(trademark)),
+            t("feed.trademark_detail", lang, listing=_listing(trademark, lang)),
+        ))
+        penalty += min(15, len(trademark) * 5)
+
+    duplicate_desc = [titles for titles in desc_index.values() if len(titles) > 1]
+    if duplicate_desc:
+        affected = sum(len(g) for g in duplicate_desc)
+        findings.append(Finding(
+            "medium", t("feed.duplicate_desc_title", lang, count=affected),
+            t("feed.duplicate_desc_detail", lang) + "\n\n" + _listing(
+                [", ".join(g) for g in duplicate_desc], lang, limit=5),
+        ))
+        penalty += min(15, affected * 3)
+
+    if scripted:
+        findings.append(Finding(
+            "high", t("feed.desc_script_title", lang, count=scripted),
+            t("feed.desc_script_detail", lang),
+        ))
+        penalty += min(15, scripted * 5)
+
+    if claim_hits:
+        findings.append(Finding(
+            "critical", t("feed.claims_title", lang, count=len(claim_hits)),
+            t("feed.claims_detail", lang, listing=_listing(sorted(claim_hits), lang)),
+        ))
+        penalty += 25
+
+    if material_hits:
+        findings.append(Finding(
+            "medium", t("feed.material_title", lang, count=len(material_hits)),
+            t("feed.material_detail", lang, listing=", ".join(sorted(material_hits))),
+        ))
+        penalty += 10
+
+    if fake_gtins:
+        findings.append(Finding(
+            "high", t("feed.fake_gtin_title", lang, count=len(fake_gtins)),
+            t("feed.fake_gtin_detail", lang, listing=_listing(fake_gtins, lang)),
+        ))
+        penalty += min(20, len(fake_gtins) * 5)
+
+    return findings, penalty
+
+
+# ---------------------------------------------------------------------------
+# F) Bilder: Dubletten, Anzahl pro Produkt, Gewicht, Lieferanten-CDN
+# ---------------------------------------------------------------------------
+IMAGE_SIZE_LIMIT_KB = 900
+
+
+def _normalize_image_src(src: str) -> str:
+    """Shopify liefert dasselbe Bild unter vielen Größen-/Cache-Varianten aus.
+    Für den Dublettenvergleich zählt der Dateiname ohne Größensuffix."""
+    path = src.split("?")[0].rsplit("/", 1)[-1]
+    return re.sub(r"_\d{2,4}x\d{0,4}(?=\.)", "", path).lower()
+
+
+def check_image_extras(
+    products_sample: list[dict],
+    image_sizes_bytes: list[int],
+    lang: str = DEFAULT_LANG,
+) -> tuple[list[Finding], int]:
+    findings: list[Finding] = []
+    penalty = 0
+    if not products_sample:
+        return findings, 0
+
+    owners: dict[str, set[str]] = {}
+    too_few: list[str] = []
+    supplier_cdn: set[str] = set()
+
+    for p in products_sample:
+        title = (p.get("title") or p.get("handle") or "?")[:45]
+        images = p.get("images") or []
+        if len(images) < MIN_IMAGES_PER_PRODUCT:
+            too_few.append(f"{title} ({len(images)})")
+        for img in images:
+            src = img.get("src") or ""
+            if not src:
+                continue
+            owners.setdefault(_normalize_image_src(src), set()).add(title)
+            for sig in SUPPLIER_CDN_SIGNATURES:
+                if sig in src.lower():
+                    supplier_cdn.add(sig)
+
+    duplicates = {name: titles for name, titles in owners.items() if len(titles) > 1}
+    if duplicates:
+        listing = [f"{name} → {', '.join(sorted(titles))}" for name, titles in duplicates.items()]
+        findings.append(Finding(
+            "high", t("images.duplicates_title", lang, count=len(duplicates)),
+            t("images.duplicates_detail", lang, listing=_listing(listing, lang, limit=6)),
+        ))
+        penalty += min(25, len(duplicates) * 5)
+
+    if too_few:
+        findings.append(Finding(
+            "medium", t("images.too_few_title", lang, count=len(too_few), min=MIN_IMAGES_PER_PRODUCT),
+            t("images.too_few_detail", lang, listing=_listing(too_few, lang)),
+        ))
+        penalty += min(15, len(too_few) * 3)
+
+    heavy = [b for b in image_sizes_bytes if b > IMAGE_SIZE_LIMIT_KB * 1024]
+    if heavy:
+        findings.append(Finding(
+            "medium", t("images.heavy_title", lang, count=len(heavy), limit_kb=IMAGE_SIZE_LIMIT_KB),
+            t("images.heavy_detail", lang, max_kb=round(max(heavy) / 1024)),
+        ))
+        penalty += min(15, len(heavy) * 3)
+
+    if supplier_cdn:
+        findings.append(Finding(
+            "critical", t("images.supplier_cdn_title", lang),
+            t("images.supplier_cdn_detail", lang, listing=", ".join(sorted(supplier_cdn))),
+        ))
+        penalty += 30
+
+    return findings, penalty
+
+
+# ---------------------------------------------------------------------------
+# E) Trust-Red-Flags: Fake-Badges, Presse-/Partner-Claims, Popups, Bestseller
+# ---------------------------------------------------------------------------
+FAKE_BADGE_PATTERNS = [
+    r"trust[-_]?badge", r"secure[-_]?checkout[-_]?badge", r"guarantee[-_]?badge",
+    r"norton[-_]?secure", r"mcafee[-_]?secure", r"ssl[-_]?seal", r"payment[-_]?badge",
+    r"100\s*%\s*(?:sicher|secure|safe)\b", r"garantiert sicher", r"money[- ]back[- ]guarantee[-_ ]badge",
+    r"geprüfter?\s+(?:online[- ]?shop|händler)", r"verified[- ]seller[- ]badge",
+]
+PRESS_PARTNER_PATTERNS = [
+    r"bekannt aus", r"as seen (?:on|in)", r"featured in", r"gesehen bei",
+    r"offizielle[rn]? (?:partner|händler|distributor)", r"official (?:partner|retailer|reseller)",
+    r"zertifizierte[rn]? (?:händler|partner)", r"certified (?:reseller|partner|dealer)",
+    r"authorized (?:dealer|reseller)", r"autorisierte[rn]? händler",
+]
+POPUP_APP_SIGNATURES = [
+    "privy.com", "optinmonster", "wisepops", "poptin", "justuno", "spin-to-win",
+    "spinawheel", "wheelio", "sumo.com", "getsitecontrol", "gluecksrad",
+]
+BESTSELLER_CLAIM_PATTERNS = [
+    r"\bbestseller\b", r"\bbest[- ]seller\b", r"kundenliebling", r"customers? (?:love|favou?rite)",
+    r"meistverkauft", r"most popular", r"beliebteste[srn]?\b", r"\btop[- ]seller\b",
+    r"#\s?1\s+(?:in|für|for)\b",
+]
+
+
+async def check_red_flags(
+    homepage_html: Optional[str],
+    product_pages: list[tuple[str, str]],
+    reviews_platform_detected: bool,
+    lang: str = DEFAULT_LANG,
+) -> CategoryResult:
+    """Kategorie E der Master-Checkliste, soweit sie im ausgelieferten HTML
+    sichtbar ist. Ein Treffer hier heißt: das Verbotene wurde gefunden."""
+    findings: list[Finding] = []
+    score = 100
+
+    all_html = (homepage_html or "") + "".join(html for _, html in product_pages)
+    if not all_html.strip():
+        findings.append(Finding("info", t("flags.unavailable_title", lang), t("flags.unavailable_detail", lang)))
+        return CategoryResult("red_flags", t("cat.red_flags", lang), 100, findings)
+
+    lower_html = all_html.lower()
+    text = visible_text(all_html).lower()
+
+    badges = {m.group(0) for p in FAKE_BADGE_PATTERNS for m in [re.search(p, lower_html, re.I)] if m}
+    press = {m.group(0) for p in PRESS_PARTNER_PATTERNS for m in [re.search(p, text, re.I)] if m}
+    popups = {s for s in POPUP_APP_SIGNATURES if s in lower_html}
+    bestseller = {m.group(0) for p in BESTSELLER_CLAIM_PATTERNS for m in [re.search(p, text, re.I)] if m}
+
+    if badges:
+        findings.append(Finding(
+            "high", t("flags.badges_title", lang),
+            t("flags.badges_detail", lang, listing=_listing(sorted(badges), lang)),
+        ))
+        score -= 25
+    if press:
+        findings.append(Finding(
+            "high", t("flags.press_title", lang),
+            t("flags.press_detail", lang, listing=_listing(sorted(press), lang)),
+        ))
+        score -= 25
+    if popups:
+        findings.append(Finding(
+            "medium", t("flags.popup_title", lang),
+            t("flags.popup_detail", lang, listing=", ".join(sorted(popups))),
+        ))
+        score -= 15
+    # "Bestseller"/"Kundenliebling" ist nur dann unbelegt, wenn es gar keine
+    # verifizierbare Bewertungs-/Verkaufsbasis im Store gibt.
+    if bestseller and not reviews_platform_detected:
+        findings.append(Finding(
+            "medium", t("flags.bestseller_title", lang),
+            t("flags.bestseller_detail", lang, listing=_listing(sorted(bestseller), lang)),
+        ))
+        score -= 15
+
+    if not findings:
+        findings.append(Finding("info", t("flags.none_title", lang), t("flags.none_detail", lang)))
+
+    return CategoryResult("red_flags", t("cat.red_flags", lang), max(0, min(100, score)), findings)
+
+
+# ---------------------------------------------------------------------------
+# H) Technik & Google-Signale
+# ---------------------------------------------------------------------------
+GOOGLE_VERIFICATION_RE = re.compile(r"google-site-verification", re.I)
+TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.S | re.I)
+THEME_ERROR_RE = re.compile(r"liquid error|translation missing|\{\{\s*[a-z_.]+\s*\}\}", re.I)
+FOOTER_RE = re.compile(r"<footer\b|role=[\"']contentinfo[\"']|class=[\"'][^\"']*\bfooter\b", re.I)
+JSONLD_RE = re.compile(r"<script[^>]+application/ld\+json[^>]*>(.*?)</script>", re.S | re.I)
+MIN_TITLE_CHARS = 25
+
+
+def _extract_offers(html: str) -> list[dict]:
+    """Zieht alle schema.org-Offer-Knoten aus dem JSON-LD einer Produktseite."""
+    import json
+
+    offers: list[dict] = []
+
+    def walk(node):
+        if isinstance(node, dict):
+            node_type = node.get("@type")
+            types = node_type if isinstance(node_type, list) else [node_type]
+            if any(isinstance(x, str) and x.lower() in ("offer", "aggregateoffer") for x in types):
+                offers.append(node)
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    for block in JSONLD_RE.findall(html):
+        try:
+            walk(json.loads(block.strip()))
+        except Exception:
+            continue
+    return offers
+
+
+async def check_technical(
+    client: httpx.AsyncClient,
+    base_url: str,
+    homepage_html: Optional[str],
+    product_pages: list[tuple[str, str]],
+    products_sample: list[dict],
+    policy_urls: dict[str, str],
+    lang: str = DEFAULT_LANG,
+) -> CategoryResult:
+    findings: list[Finding] = []
+    score = 100
+
+    if not homepage_html:
+        findings.append(Finding("info", t("tech.unavailable_title", lang), t("tech.unavailable_detail", lang)))
+        findings.append(Finding("info", t("tech.gmc_note_title", lang), t("tech.gmc_note_detail", lang)))
+        return CategoryResult("technical", t("cat.technical", lang), 100, findings)
+
+    # 1) Google-Site-Verification im <head>
+    head = homepage_html[:20000]
+    if GOOGLE_VERIFICATION_RE.search(head):
+        findings.append(Finding("info", t("tech.verification_found_title", lang), t("tech.verification_found_detail", lang)))
+    else:
+        findings.append(Finding("high", t("tech.no_verification_title", lang), t("tech.no_verification_detail", lang)))
+        score -= 20
+
+    # 2) Startseiten-Titel
+    host = urlparse(base_url).netloc.replace("www.", "")
+    brand = host.split(".")[0]
+    title_match = TITLE_RE.search(homepage_html)
+    title = visible_text(title_match.group(1)) if title_match else ""
+    if not title:
+        findings.append(Finding("medium", t("tech.title_missing_title", lang), t("tech.title_missing_detail", lang)))
+        score -= 10
+    elif len(title) < MIN_TITLE_CHARS or re.sub(r"\W", "", title.lower()) in (
+        re.sub(r"\W", "", host.lower()), brand.lower()
+    ):
+        findings.append(Finding("medium", t("tech.title_weak_title", lang, title=title[:80]), t("tech.title_weak_detail", lang)))
+        score -= 10
+    else:
+        findings.append(Finding("info", t("tech.title_ok_title", lang), title[:120]))
+
+    # 3) Theme-Fehler + 4) Footer auf jeder Seite — über einen breiten
+    #    Seitenquerschnitt: Startseite, alle Policy-Seiten, Produktseiten.
+    sampled: dict[str, str] = {base_url: homepage_html}
+    policy_pages = await fetch_product_pages(client, list(policy_urls.values())[:8])
+    sampled.update(dict(policy_pages))
+    sampled.update(dict(product_pages[:5]))
+
+    theme_errors = [url for url, html in sampled.items() if html and THEME_ERROR_RE.search(visible_text(html))]
+    if theme_errors:
+        findings.append(Finding(
+            "high", t("tech.liquid_errors_title", lang, count=len(theme_errors)),
+            t("tech.liquid_errors_detail", lang, listing=_listing(theme_errors, lang)),
+        ))
+        score -= min(20, len(theme_errors) * 7)
+
+    footerless = [url for url, html in sampled.items() if html and not FOOTER_RE.search(html)]
+    if footerless:
+        findings.append(Finding(
+            "high", t("tech.no_footer_title", lang, count=len(footerless), total=len(sampled)),
+            t("tech.no_footer_detail", lang, listing=_listing(footerless, lang)),
+        ))
+        score -= min(20, len(footerless) * 6)
+    elif sampled:
+        findings.append(Finding(
+            "info", t("tech.footer_ok_title", lang), t("tech.footer_ok_detail", lang, total=len(sampled)),
+        ))
+
+    # 5) schema.org Offer vs. tatsächliche Shop-Daten. Laut Checkliste die
+    #    klassische Quelle für "automatische Artikel-Updates" -> Sperre.
+    price_by_handle: dict[str, set[str]] = {}
+    availability_by_handle: dict[str, bool] = {}
+    for p in products_sample:
+        handle = (p.get("handle") or "").lower()
+        if not handle:
+            continue
+        variants = p.get("variants") or []
+        price_by_handle[handle] = {f"{float(v.get('price') or 0):.2f}" for v in variants}
+        availability_by_handle[handle] = any(v.get("available") for v in variants)
+
+    checked = 0
+    price_mismatches: list[str] = []
+    availability_mismatches: list[str] = []
+    for url, html in product_pages:
+        offers = _extract_offers(html)
+        if not offers:
+            continue
+        checked += 1
+        handle = url.rstrip("/").rsplit("/", 1)[-1].split("?")[0].lower()
+        expected_prices = price_by_handle.get(handle)
+        expected_available = availability_by_handle.get(handle)
+
+        for offer in offers:
+            raw_price = offer.get("price") or offer.get("lowPrice")
+            if raw_price is not None and expected_prices:
+                try:
+                    markup_price = f"{float(str(raw_price).replace(',', '.')):.2f}"
+                except (TypeError, ValueError):
+                    markup_price = None
+                if markup_price and markup_price not in expected_prices:
+                    price_mismatches.append(
+                        f"{url} — Markup: {markup_price} / Shop: {', '.join(sorted(expected_prices))}"
+                    )
+            raw_avail = str(offer.get("availability") or "").lower()
+            if raw_avail and expected_available is not None:
+                markup_available = "instock" in raw_avail.replace("_", "")
+                if markup_available != expected_available:
+                    availability_mismatches.append(
+                        f"{url} — Markup: {'InStock' if markup_available else 'OutOfStock'} / "
+                        f"Shop: {'verfügbar' if expected_available else 'ausverkauft'}"
+                    )
+
+    if product_pages and checked == 0:
+        findings.append(Finding(
+            "medium", t("tech.no_structured_data_title", lang), t("tech.no_structured_data_detail", lang),
+        ))
+        score -= 12
+    elif checked:
+        if price_mismatches:
+            findings.append(Finding(
+                "critical", t("tech.price_mismatch_title", lang),
+                t("tech.price_mismatch_detail", lang, listing=_listing(sorted(set(price_mismatches)), lang)),
+            ))
+            score -= 30
+        if availability_mismatches:
+            findings.append(Finding(
+                "high", t("tech.availability_mismatch_title", lang),
+                t("tech.availability_mismatch_detail", lang, listing=_listing(sorted(set(availability_mismatches)), lang)),
+            ))
+            score -= 20
+        if not price_mismatches and not availability_mismatches:
+            findings.append(Finding(
+                "info", t("tech.structured_data_ok_title", lang),
+                t("tech.structured_data_ok_detail", lang, count=checked),
+            ))
+
+    # 6) Transparenz: was von außen prinzipiell nicht prüfbar ist, wird
+    #    ausgewiesen statt stillschweigend weggelassen (Kategorie I/J).
+    findings.append(Finding("info", t("tech.gmc_note_title", lang), t("tech.gmc_note_detail", lang)))
+
+    return CategoryResult("technical", t("cat.technical", lang), max(0, min(100, score)), findings)
