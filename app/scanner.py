@@ -202,6 +202,11 @@ USED_CONDITION_KEYWORDS = [
 ]
 
 
+# Ein Hostname besteht aus Buchstaben (auch Umlaute/IDN), Ziffern, Bindestrich
+# und Punkt. Er darf nicht mit Punkt oder Bindestrich beginnen oder enden.
+_HOSTNAME_RE = re.compile(r"^(?!-)(?!\.)[\w\-.]+(?<!-)(?<!\.)$", re.UNICODE)
+
+
 def normalize_url(raw: str) -> str:
     raw = raw.strip()
     if not re.match(r"^https?://", raw, re.I):
@@ -209,6 +214,21 @@ def normalize_url(raw: str) -> str:
     parsed = urlparse(raw)
     if not parsed.netloc:
         raise ValueError("Ungültige URL")
+
+    # netloc allein reicht als Pruefung nicht: "!!!" landet hier sonst als
+    # gueltige Domain und bekaeme im Bezahlvorgang echtes Guthaben
+    # zugeschrieben. Deshalb den Host gegenpruefen.
+    try:
+        host = parsed.hostname or ""
+    except ValueError:  # z.B. kaputte Klammern in einer IPv6-Adresse
+        raise ValueError("Ungültige URL")
+    if not host or not _HOSTNAME_RE.match(host):
+        raise ValueError("Ungültige URL")
+    # Entweder eine echte Domain mit Punkt oder ausdruecklich localhost -
+    # letzteres brauchen die lokalen Tests gegen den Fake-Shop.
+    if "." not in host and host != "localhost":
+        raise ValueError("Ungültige URL")
+
     return f"{parsed.scheme}://{parsed.netloc}"
 
 

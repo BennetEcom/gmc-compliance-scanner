@@ -247,7 +247,7 @@ function showPackageNotice(storeUrl) {
   document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-async function buyPackage(url, pkg, triggerBtn) {
+async function buyPackage(allocations, pkg, triggerBtn) {
   const originalText = triggerBtn.textContent;
   triggerBtn.disabled = true;
   triggerBtn.textContent = tUI("btn.checking");
@@ -255,7 +255,7 @@ async function buyPackage(url, pkg, triggerBtn) {
     const resp = await fetch("/api/buy-package", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, package: pkg, lang: getLang() }),
+      body: JSON.stringify({ allocations, package: pkg, lang: getLang() }),
     });
     if (!resp.ok) {
       const data = await resp.json().catch(() => ({}));
@@ -271,18 +271,107 @@ async function buyPackage(url, pkg, triggerBtn) {
 }
 
 const packageModal = document.getElementById("package-modal");
-const modalStoreUrl = document.getElementById("modal-store-url");
 const modalError = document.getElementById("modal-error");
 const modalConfirm = document.getElementById("modal-confirm");
 const modalCancel = document.getElementById("modal-cancel");
+const allocRows = document.getElementById("alloc-rows");
+const allocAdd = document.getElementById("alloc-add");
+const allocSummary = document.getElementById("alloc-summary");
 let pendingPackageBtn = null;
+let allocTotal = 1;
+
+// --- Aufteilung der gekauften Scans auf mehrere Domains -------------------
+// Guthaben haengt in diesem System immer an genau einer Domain. Wer ein
+// Paket fuer mehrere Shops kauft, muss deshalb schon beim Kauf festlegen,
+// wie viele Scans auf welchen Shop gehen. Die Summe muss exakt der
+// Paketgroesse entsprechen - ein Rest haette keinen Ort, an dem er liegen
+// koennte. Der Server prueft dasselbe nochmal.
+
+function allocEntries() {
+  return [...allocRows.querySelectorAll(".alloc-row")].map((row) => ({
+    url: row.querySelector(".alloc-url").value.trim(),
+    scans: Math.max(1, parseInt(row.querySelector(".alloc-scans").value, 10) || 0),
+    row,
+  }));
+}
+
+function allocAssigned() {
+  return allocEntries().reduce((sum, e) => sum + e.scans, 0);
+}
+
+function renderAllocSummary() {
+  const assigned = allocAssigned();
+  const rows = allocRows.querySelectorAll(".alloc-row").length;
+  allocSummary.textContent = tUI("modal.summary")
+    .replace("{assigned}", assigned)
+    .replace("{total}", allocTotal);
+  allocSummary.classList.toggle("alloc-summary-off", assigned !== allocTotal);
+  // Begrenzt wird ueber die Zeilenzahl, nicht ueber die Summe: bei korrekt
+  // verteilten Scans waere sonst nie eine weitere Domain hinzuzufuegen.
+  // Jede Domain braucht mindestens einen Scan, also hoechstens so viele
+  // Zeilen wie gekaufte Scans.
+  allocAdd.disabled = rows >= allocTotal;
+  modalConfirm.disabled = assigned !== allocTotal;
+  allocRows.querySelectorAll(".alloc-remove").forEach((btn) => {
+    btn.hidden = rows < 2;
+  });
+}
+
+function addAllocRow(url = "", scans = 1) {
+  const row = document.createElement("div");
+  row.className = "alloc-row";
+
+  const urlInput = document.createElement("input");
+  urlInput.type = "text";
+  urlInput.className = "alloc-url";
+  urlInput.autocomplete = "off";
+  urlInput.placeholder = tUI("hero.input_placeholder");
+  urlInput.value = url;
+
+  const scansInput = document.createElement("input");
+  scansInput.type = "number";
+  scansInput.className = "alloc-scans";
+  scansInput.min = "1";
+  scansInput.max = String(allocTotal);
+  scansInput.value = String(scans);
+  scansInput.setAttribute("aria-label", tUI("modal.scans_label"));
+
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "alloc-remove";
+  remove.textContent = "\u00d7";
+  remove.setAttribute("aria-label", tUI("modal.remove_domain"));
+  remove.addEventListener("click", () => {
+    // Die Scans der entfernten Zeile wandern zurueck auf die erste - sonst
+    // waere die Summe nach jedem Entfernen unvollstaendig und muesste von
+    // Hand nachgerechnet werden.
+    const freed = Math.max(1, parseInt(scansInput.value, 10) || 1);
+    row.remove();
+    const first = allocRows.querySelector(".alloc-row .alloc-scans");
+    if (first) {
+      first.value = String((parseInt(first.value, 10) || 0) + freed);
+    }
+    renderAllocSummary();
+  });
+
+  scansInput.addEventListener("input", renderAllocSummary);
+  row.append(urlInput, scansInput, remove);
+  allocRows.appendChild(row);
+  return urlInput;
+}
 
 function openPackageModal(pkgBtn) {
   pendingPackageBtn = pkgBtn;
+  allocTotal = parseInt(pkgBtn.getAttribute("data-package-scans"), 10) || 1;
   modalError.hidden = true;
-  modalStoreUrl.value = "";
+  allocRows.innerHTML = "";
+  // Erste Zeile bekommt alle Scans und, falls oben schon eine URL steht,
+  // gleich die passende Domain.
+  const prefill = document.getElementById("store-url").value.trim();
+  const firstInput = addAllocRow(prefill, allocTotal);
+  renderAllocSummary();
   packageModal.hidden = false;
-  modalStoreUrl.focus();
+  firstInput.focus();
 }
 
 function closePackageModal() {
@@ -290,33 +379,49 @@ function closePackageModal() {
   pendingPackageBtn = null;
 }
 
+allocAdd.addEventListener("click", () => {
+  if (allocAdd.disabled) return;
+  // Der neue Zeile wird ein Scan von der ersten abgezogen, damit die Summe
+  // stimmt und niemand erst haendisch nachrechnen muss.
+  const entries = allocEntries();
+  const donor = entries.find((e) => e.scans > 1);
+  if (donor) {
+    donor.row.querySelector(".alloc-scans").value = String(donor.scans - 1);
+  }
+  addAllocRow("", 1).focus();
+  renderAllocSummary();
+});
+
 modalCancel.addEventListener("click", closePackageModal);
 packageModal.addEventListener("click", (e) => {
   if (e.target === packageModal) closePackageModal();
 });
 
 modalConfirm.addEventListener("click", async () => {
-  const url = modalStoreUrl.value.trim();
-  if (!url) {
+  const entries = allocEntries();
+  if (entries.some((e) => !e.url)) {
     modalError.textContent = tUI("err.empty_url");
+    modalError.hidden = false;
+    return;
+  }
+  const assigned = entries.reduce((sum, e) => sum + e.scans, 0);
+  if (assigned !== allocTotal) {
+    modalError.textContent = tUI("err.alloc_sum")
+      .replace("{assigned}", assigned)
+      .replace(/\{total\}/g, allocTotal);
     modalError.hidden = false;
     return;
   }
   const pkgBtn = pendingPackageBtn;
   const pkg = pkgBtn.getAttribute("data-package");
   closePackageModal();
-  await buyPackage(url, pkg, pkgBtn);
+  await buyPackage(entries.map((e) => ({ url: e.url, scans: e.scans })), pkg, pkgBtn);
 });
 
 document.querySelectorAll("[data-package]").forEach((pkgBtn) => {
-  pkgBtn.addEventListener("click", () => {
-    const url = document.getElementById("store-url").value.trim();
-    if (url) {
-      buyPackage(url, pkgBtn.getAttribute("data-package"), pkgBtn);
-    } else {
-      openPackageModal(pkgBtn);
-    }
-  });
+  // Immer ueber den Dialog: auch mit ausgefuelltem URL-Feld oben muss man
+  // die Scans noch verteilen koennen, statt direkt im Checkout zu landen.
+  pkgBtn.addEventListener("click", () => openPackageModal(pkgBtn));
 });
 
 form.addEventListener("submit", async (e) => {

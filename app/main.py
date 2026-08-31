@@ -2,6 +2,7 @@ import json
 import os
 from datetime import datetime, timezone
 from typing import Optional
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -17,6 +18,7 @@ from app.config import (
 )
 from app.i18n import resolve_lang, t
 from app.payments import (
+    AllocationTooLargeError,
     is_stripe_configured,
     create_package_checkout_session,
     verify_paid_session,
@@ -99,9 +101,15 @@ class StartScanRequest(BaseModel):
     lang: str = "de"
 
 
-class BuyPackageRequest(BaseModel):
+class PackageAllocation(BaseModel):
+    """Eine Domain und die Anzahl Scans, die ihr aus dem Paket zufallen."""
     url: str
+    scans: int
+
+
+class BuyPackageRequest(BaseModel):
     package: str
+    allocations: list[PackageAllocation]
     lang: str = "de"
 
 
@@ -179,13 +187,40 @@ async def api_start_scan(payload: StartScanRequest):
 async def api_buy_package(payload: BuyPackageRequest):
     if payload.package not in SCAN_PACKAGES:
         raise HTTPException(status_code=400, detail="Ungültiges Paket")
-    try:
-        normalized = normalize_url(payload.url)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Ungültige URL")
 
     lang = resolve_lang(payload.lang)
-    session = create_package_checkout_session(normalized, payload.package, lang)
+    total_scans = SCAN_PACKAGES[payload.package]["scans"]
+
+    if not payload.allocations:
+        raise HTTPException(status_code=400, detail=t("err.alloc_empty", lang))
+
+    # Serverseitig gegenpruefen statt dem Browser zu vertrauen: sonst liesse
+    # sich mit einer manipulierten Anfrage mehr Guthaben buchen als bezahlt.
+    normalized: list[tuple[str, int]] = []
+    seen: set[str] = set()
+    for entry in payload.allocations:
+        try:
+            url = normalize_url(entry.url)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=t("err.alloc_bad_url", lang, url=entry.url[:80]))
+        if entry.scans < 1:
+            raise HTTPException(status_code=400, detail=t("err.alloc_min_one", lang, url=url))
+        if url in seen:
+            raise HTTPException(status_code=400, detail=t("err.alloc_duplicate", lang, url=url))
+        seen.add(url)
+        normalized.append((url, entry.scans))
+
+    assigned = sum(n for _, n in normalized)
+    if assigned != total_scans:
+        raise HTTPException(
+            status_code=400,
+            detail=t("err.alloc_sum", lang, assigned=assigned, total=total_scans),
+        )
+
+    try:
+        session = create_package_checkout_session(normalized, payload.package, lang)
+    except AllocationTooLargeError:
+        raise HTTPException(status_code=400, detail=t("err.alloc_too_long", lang))
     return {"mode": "redirect", **session}
 
 
@@ -214,14 +249,30 @@ async def api_scan_result(session_id: str):
     if not paid.store_url:
         raise HTTPException(status_code=402, detail="Zahlung nicht bestätigt oder Session ungültig.")
 
-    result = await run_scan(paid.store_url, paid.lang)
-    remaining_credits = paid.scans_granted - 1
-    if remaining_credits > 0:
-        _stats["credits"][paid.store_url] = _stats["credits"].get(paid.store_url, 0) + remaining_credits
-        result["_notice"] = t("notice.package_bought", paid.lang, remaining=_stats["credits"][paid.store_url])
+    # Der erste Eintrag der Aufteilung wird sofort gescannt, der Rest wird als
+    # Guthaben je Domain gutgeschrieben. Genau ein Scan des Pakets ist damit
+    # direkt verbraucht.
+    allocations = paid.allocations or [(paid.store_url, paid.scans_granted)]
+    first_url, first_scans = allocations[0]
+
+    result = await run_scan(first_url, paid.lang)
+
+    for url, scans in allocations:
+        extra = scans - 1 if url == first_url else scans
+        if extra > 0:
+            _stats["credits"][url] = _stats["credits"].get(url, 0) + extra
+
+    if len(allocations) > 1:
+        overview = " · ".join(
+            f"{urlparse(u).netloc}: {_stats['credits'].get(u, 0)}" for u, _ in allocations
+        )
+        result["_notice"] = t("notice.package_bought_split", paid.lang, overview=overview)
+    elif first_scans > 1:
+        result["_notice"] = t("notice.package_bought", paid.lang, remaining=_stats["credits"].get(first_url, 0))
+
     cache_result(session_id, result)
     _stats["scans_completed"] += 1
-    _stats["scanned_domains"].append(paid.store_url)
+    _stats["scanned_domains"].append(first_url)
     _save_stats()
     return result
 

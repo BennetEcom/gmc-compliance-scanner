@@ -290,7 +290,7 @@
           <p class="pricing-amount">10&nbsp;€</p>
           <p class="pricing-per" data-i18n-html="pricing.p2.per">5&nbsp;€ pro Scan</p>
           <p class="pricing-desc" data-i18n="pricing.p2.desc">Ideal, um einen Fix direkt gegenzuprüfen.</p>
-          <button type="button" class="pricing-cta" data-package="2" data-i18n="pricing.cta_choose">Paket wählen</button>
+          <button type="button" class="pricing-cta" data-package="2" data-package-scans="2" data-i18n="pricing.cta_choose">Paket wählen</button>
         </div>
         <div class="pricing-card pricing-card-highlight">
           <span class="pricing-badge" data-i18n="pricing.badge_popular">Beliebt</span>
@@ -301,7 +301,7 @@
             <span class="pricing-save" data-i18n="pricing.p5.save">-20%</span>
           </p>
           <p class="pricing-desc" data-i18n="pricing.p5.desc">Für mehrere Stores oder Shops mit laufenden Anpassungen.</p>
-          <button type="button" class="pricing-cta pricing-cta-solid" data-package="5" data-i18n="pricing.cta_choose">Paket wählen</button>
+          <button type="button" class="pricing-cta pricing-cta-solid" data-package="5" data-package-scans="5" data-i18n="pricing.cta_choose">Paket wählen</button>
         </div>
         <div class="pricing-card">
           <p class="pricing-tier" data-i18n="pricing.p10.tier">10 SCANS</p>
@@ -311,7 +311,7 @@
             <span class="pricing-save" data-i18n="pricing.p10.save">-30%</span>
           </p>
           <p class="pricing-desc" data-i18n="pricing.p10.desc">Bester Preis pro Scan – für Agenturen und mehrere Shops.</p>
-          <button type="button" class="pricing-cta" data-package="10" data-i18n="pricing.cta_choose">Paket wählen</button>
+          <button type="button" class="pricing-cta" data-package="10" data-package-scans="10" data-i18n="pricing.cta_choose">Paket wählen</button>
         </div>
       </div>
       <p class="pricing-footnote" data-i18n="pricing.footnote">Ein gekauftes Paket gilt nur für die gescannte Domain, nicht domainübergreifend.</p>
@@ -374,16 +374,14 @@
   </footer>
 
   <div id="package-modal" class="modal-overlay" hidden>
-    <div class="modal-box">
-      <h3 data-i18n="modal.title">Für welche Domain?</h3>
-      <p class="modal-desc" data-i18n="modal.desc">Trag die Domain ein, für die du das Paket kaufen möchtest.</p>
-      <input
-        id="modal-store-url"
-        type="text"
-        data-i18n-placeholder="hero.input_placeholder"
-        placeholder="deinshop.myshopify.com"
-        autocomplete="off"
-      />
+    <div class="modal-box modal-box-alloc">
+      <h3 data-i18n="modal.title">Für welche Domains?</h3>
+      <p class="modal-desc" data-i18n="modal.desc">Verteile die gekauften Scans auf deine Shops. Guthaben gilt immer nur für die hier eingetragene Domain.</p>
+
+      <div id="alloc-rows" class="alloc-rows"></div>
+
+      <button type="button" id="alloc-add" class="alloc-add" data-i18n="modal.add_domain">+ Weitere Domain</button>
+      <p id="alloc-summary" class="alloc-summary"></p>
       <p id="modal-error" class="form-error" hidden></p>
       <div class="modal-actions">
         <button type="button" id="modal-cancel" class="modal-btn modal-btn-cancel" data-i18n="modal.cancel">Abbrechen</button>

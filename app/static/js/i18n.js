@@ -187,8 +187,13 @@ const I18N = {
   "err.package_checkout": { de: "Fehler beim Starten des Bezahlvorgangs.", en: "Error starting the checkout." },
   "btn.checking": { de: "Wird geprüft...", en: "Checking..." },
 
-  "modal.title": { de: "Für welche Domain?", en: "For which domain?" },
-  "modal.desc": { de: "Trag die Domain ein, für die du das Paket kaufen möchtest.", en: "Enter the domain you want to buy the package for." },
+  "modal.title": { de: "Für welche Domains?", en: "For which domains?" },
+  "modal.desc": { de: "Verteile die gekauften Scans auf deine Shops. Guthaben gilt immer nur für die hier eingetragene Domain.", en: "Split the purchased scans across your stores. Credit always applies only to the domain entered here." },
+  "modal.add_domain": { de: "+ Weitere Domain", en: "+ Another domain" },
+  "modal.remove_domain": { de: "Domain entfernen", en: "Remove domain" },
+  "modal.scans_label": { de: "Anzahl Scans", en: "Number of scans" },
+  "modal.summary": { de: "{assigned} von {total} Scans verteilt", en: "{assigned} of {total} scans allocated" },
+  "err.alloc_sum": { de: "Du hast {assigned} von {total} Scans verteilt. Die Summe muss genau {total} ergeben.", en: "You have allocated {assigned} of {total} scans. The total must be exactly {total}." },
   "modal.cancel": { de: "Abbrechen", en: "Cancel" },
   "modal.confirm": { de: "Weiter zum Bezahlen", en: "Continue to payment" },
   "package.notice": {

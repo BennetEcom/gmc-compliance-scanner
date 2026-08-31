@@ -19,7 +19,8 @@ Ablauf:
 In-Memory Cache verhindert doppelten Scan/Mehrfachnutzung derselben Session.
 """
 
-from typing import NamedTuple, Optional
+import json
+from typing import List, NamedTuple, Optional, Tuple
 
 import stripe
 
@@ -37,8 +38,30 @@ def is_stripe_configured() -> bool:
     return bool(STRIPE_SECRET_KEY) and all(p["price_id"] for p in SCAN_PACKAGES.values())
 
 
-def create_package_checkout_session(store_url: str, package: str, lang: str = DEFAULT_LANG) -> dict:
+# Stripe erlaubt 500 Zeichen je Metadata-Wert. Die Aufteilung reist als
+# kompaktes JSON durch den Bezahlvorgang, weil wir nach der Rueckkehr aus
+# dem Checkout keine andere verlaessliche Quelle dafuer haben.
+STRIPE_METADATA_VALUE_LIMIT = 500
+
+
+class AllocationTooLargeError(ValueError):
+    """Die Domain-Aufteilung passt nicht in die Stripe-Metadaten."""
+
+
+def _serialize_allocations(allocations: List[Tuple[str, int]]) -> str:
+    return json.dumps([[u, n] for u, n in allocations], separators=(",", ":"))
+
+
+def create_package_checkout_session(
+    allocations: List[Tuple[str, int]], package: str, lang: str = DEFAULT_LANG
+) -> dict:
+    """allocations ist eine Liste (store_url, anzahl_scans). Die Summe muss
+    der Paketgroesse entsprechen; das prueft der Aufrufer in main.py."""
     pkg = SCAN_PACKAGES[package]
+    packed = _serialize_allocations(allocations)
+    if len(packed) > STRIPE_METADATA_VALUE_LIMIT:
+        raise AllocationTooLargeError(len(packed))
+
     session = stripe.checkout.Session.create(
         mode="payment",
         line_items=[{"price": pkg["price_id"], "quantity": 1}],
@@ -46,9 +69,12 @@ def create_package_checkout_session(store_url: str, package: str, lang: str = DE
         success_url=f"{APP_BASE_URL}/scan/result?session_id={{CHECKOUT_SESSION_ID}}&lang={lang}",
         cancel_url=f"{APP_BASE_URL}/?canceled=1",
         metadata={
-            "store_url": store_url,
+            # store_url bleibt erhalten: aeltere, noch offene Checkout-Sessions
+            # ohne allocations muessen weiter einloesbar sein.
+            "store_url": allocations[0][0],
             "lang": lang,
             "scans_granted": str(pkg["scans"]),
+            "allocations": packed,
         },
     )
     return {"checkout_url": session.url, "session_id": session.id}
@@ -58,10 +84,11 @@ class PaidSession(NamedTuple):
     store_url: Optional[str]
     lang: str
     scans_granted: int
+    allocations: List[Tuple[str, int]]
 
 
 def verify_paid_session(session_id: str) -> PaidSession:
-    """Liest Store-URL, Sprache und gekaufte Scan-Anzahl aus der Session, wenn
+    """Liest Store-URLs, Sprache und gekaufte Scan-Anzahl aus der Session, wenn
     sie bezahlt (oder durch 100%-Promo-Code auf 0 reduziert) wurde. store_url
     ist None, wenn (noch) nicht bezahlt."""
     session = stripe.checkout.Session.retrieve(session_id)
@@ -69,8 +96,23 @@ def verify_paid_session(session_id: str) -> PaidSession:
     lang = resolve_lang(meta.get("lang"))
     paid_or_free = session.payment_status in ("paid", "no_payment_required")
     if not paid_or_free:
-        return PaidSession(None, lang, 0)
-    return PaidSession(meta.get("store_url"), lang, int(meta.get("scans_granted", 1)))
+        return PaidSession(None, lang, 0, [])
+
+    store_url = meta.get("store_url")
+    scans_granted = int(meta.get("scans_granted", 1))
+
+    allocations: List[Tuple[str, int]] = []
+    raw = meta.get("allocations")
+    if raw:
+        try:
+            allocations = [(str(u), int(n)) for u, n in json.loads(raw)]
+        except (ValueError, TypeError):
+            allocations = []
+    if not allocations and store_url:
+        # Sessions aus der Zeit vor der Mehrfach-Domain-Aufteilung
+        allocations = [(store_url, scans_granted)]
+
+    return PaidSession(store_url, lang, scans_granted, allocations)
 
 
 def cache_result(session_id: str, result: dict) -> None:

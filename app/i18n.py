@@ -57,6 +57,34 @@ _T: dict[str, dict[str, str]] = {
         "de": "1 Scan aus deinem Guthaben verwendet. Noch {remaining} Scan(s) übrig.",
         "en": "1 scan used from your credit. {remaining} scan(s) left.",
     },
+    "notice.package_bought_split": {
+        "de": "Paket gekauft und auf mehrere Domains verteilt. Verbleibendes Guthaben je Domain: {overview}.",
+        "en": "Package purchased and split across several domains. Remaining credit per domain: {overview}.",
+    },
+    "err.alloc_empty": {
+        "de": "Trag mindestens eine Domain ein, auf die die Scans gehen sollen.",
+        "en": "Enter at least one domain for the scans to go to.",
+    },
+    "err.alloc_bad_url": {
+        "de": "„{url}“ ist keine gültige Domain.",
+        "en": "\"{url}\" is not a valid domain.",
+    },
+    "err.alloc_min_one": {
+        "de": "Jede eingetragene Domain braucht mindestens einen Scan ({url}).",
+        "en": "Every domain listed needs at least one scan ({url}).",
+    },
+    "err.alloc_duplicate": {
+        "de": "{url} steht doppelt in der Liste. Fasse die Scans in einer Zeile zusammen.",
+        "en": "{url} appears twice in the list. Combine its scans into one row.",
+    },
+    "err.alloc_sum": {
+        "de": "Du hast {assigned} von {total} Scans verteilt. Die Summe muss genau {total} ergeben.",
+        "en": "You have allocated {assigned} of {total} scans. The total must be exactly {total}.",
+    },
+    "err.alloc_too_long": {
+        "de": "Die Liste der Domains ist zu lang, um sie durch den Bezahlvorgang zu tragen. Nutze weniger oder kürzere Domains.",
+        "en": "The list of domains is too long to carry through the payment process. Use fewer or shorter domains.",
+    },
     "notice.package_bought": {
         "de": "Danke für deinen Kauf! Dein Scan-Guthaben: {remaining} weitere Scan(s).",
         "en": "Thanks for your purchase! Your scan credit: {remaining} more scan(s).",
