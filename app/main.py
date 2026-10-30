@@ -174,10 +174,8 @@ async def api_start_scan(payload: StartScanRequest):
         _record_scan(normalized, "owner")
         return {"mode": "direct", "result": result}
 
-    # 2) Key eingelöst -> Scan unabhängig davon, ob die Domain ihren
-    #    kostenlosen Scan schon verbraucht hat. Der Key wird erst NACH dem
-    #    erfolgreichen Scan verbucht: stirbt der Scan unterwegs, ist der Key
-    #    nicht verloren.
+    # 2) Ohne Key kein Scan. Der Key wird erst NACH dem erfolgreichen Scan
+    #    verbucht: stirbt der Scan unterwegs, ist der Key nicht verloren.
     if payload.key:
         status, bound_url = scan_keys.check(payload.key)
         if status == scan_keys.KeyStatus.UNKNOWN:
@@ -194,15 +192,8 @@ async def api_start_scan(payload: StartScanRequest):
         _record_scan(normalized, "key")
         return {"mode": "direct", "result": result}
 
-    # 3) Diese Domain wurde noch nie gescannt -> erster Scan ist gratis
-    if normalized not in _stats["scanned_domains"]:
-        result = await run_scan(normalized, lang)
-        result["_notice"] = t("notice.first_free_key", lang)
-        _record_scan(normalized, "free")
-        return {"mode": "direct", "result": result}
 
-    # 4) Domain wurde bereits gescannt -> vorhandenes Guthaben DIESER Domain
-    #    verbrauchen, sonst zur Paket-Auswahl auffordern
+    # 3) Guthaben aus einem frueher gekauften Paket einloesen
     credits = _stats["credits"].get(normalized, 0)
     if credits > 0:
         result = await run_scan(normalized, lang)
@@ -211,8 +202,7 @@ async def api_start_scan(payload: StartScanRequest):
         result["_notice"] = t("notice.credit_used", lang, remaining=credits - 1)
         return {"mode": "direct", "result": result}
 
-    # 5) Kein Gratis-Scan, kein Guthaben, kein Key -> es braucht einen Key.
-    #    Solange der Verkauf aus ist, gibt es keine Paket-Auswahl mehr.
+    # 4) Kein Key, kein Guthaben -> gescannt wird nur mit Key.
     if not SALES_ENABLED:
         return {"mode": "need_key", "message": t("notice.need_key", lang)}
 

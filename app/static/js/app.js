@@ -448,6 +448,14 @@ form.addEventListener("submit", async (e) => {
     return;
   }
 
+  // Ohne Key gar nicht erst losschicken: spart einen Serverweg und die
+  // Meldung steht sofort am Formular statt nach dem Ladebalken.
+  if (!key) {
+    showError(tUI("err.key_required"));
+    if (keyField) keyField.focus();
+    return;
+  }
+
   const originalBtnText = btn.textContent;
   btn.disabled = true;
   btn.textContent = tUI("btn.checking");

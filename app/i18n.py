@@ -53,13 +53,9 @@ _T: dict[str, dict[str, str]] = {
         "de": "Key eingelöst. Dieser Scan ist damit bezahlt – der Key ist jetzt verbraucht und an diese Domain gebunden.",
         "en": "Key redeemed. This scan is paid for – the key is now used up and tied to this domain.",
     },
-    "notice.first_free_key": {
-        "de": "Scan abgeschlossen. Für einen weiteren Scan dieser Domain brauchst du einen Scan-Key.",
-        "en": "Scan complete. A further scan of this domain needs a scan key.",
-    },
     "notice.need_key": {
-        "de": "Für einen weiteren Scan dieser Domain brauchst du einen Scan-Key. Trag ihn oben ein und starte den Scan erneut.",
-        "en": "A further scan of this domain needs a scan key. Enter it above and start the scan again.",
+        "de": "Gescannt wird ausschließlich mit einem Scan-Key. Trag deinen Key oben ein und starte den Scan erneut.",
+        "en": "Scanning works exclusively with a scan key. Enter your key above and start the scan again.",
     },
     "err.key_unknown": {
         "de": "Diesen Scan-Key kennen wir nicht. Bitte prüf die Schreibweise – das Format ist GMCA-XXXXX-XXXXX-XXXXX.",
