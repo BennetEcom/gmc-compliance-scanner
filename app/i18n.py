@@ -240,10 +240,10 @@ _T: dict[str, dict[str, str]] = {
         "de": "Gefunden: {emails}. Google verlangt identische Kontaktdaten auf Footer, Kontaktseite und Rechtstexten (NAP-Konsistenz).",
         "en": "Found: {emails}. Google requires identical contact details across footer, contact page, and legal pages (NAP consistency).",
     },
-    "contact.placeholder_title": {"de": "Platzhalter-/Beispieltext auf der Seite gefunden", "en": "Placeholder/sample text found on the page"},
+    "contact.placeholder_title": {"de": "{count} Platzhalter-/Beispieltext(e) auf der Seite gefunden", "en": "{count} placeholder/sample text(s) found on the page"},
     "contact.placeholder_detail": {
-        "de": "Erkannte Muster wie eckige Klammern, 'Lorem Ipsum' oder Formular-Vorbelegungen (z. B. 'you@email.com'). Google hat das in einem Support-Ticket 2026-07 explizit als Ablehnungsgrund genannt.",
-        "en": "Detected patterns like square brackets, 'Lorem Ipsum', or form placeholders (e.g. 'you@email.com'). Google explicitly named this as a rejection reason in a support ticket in July 2026.",
+        "de": "{listing}\n\nDas sind Reste aus der Theme-Vorlage oder dem Kontaktformular, die nie ersetzt wurden. Google hat genau das in einem Support-Ticket ausdrücklich als Ablehnungsgrund genannt: für einen Prüfer sieht ein Shop mit „[Firmenname]“ oder „you@email.com“ im Text unfertig aus.\n\nSo behebst du es: jede Fundstelle auf der genannten Seite suchen und durch deine echte Angabe ersetzen. Bei Formularfeldern darf im Feld selbst kein Beispielwert vorbelegt sein – dort gehört eine neutrale Beschriftung hin, kein Mustername und keine Musteradresse.",
+        "en": "{listing}\n\nThese are leftovers from the theme template or the contact form that were never replaced. Google named exactly this in a support ticket as grounds for rejection: to a reviewer, a store showing \"[company name]\" or \"you@email.com\" in its text looks unfinished.\n\nHow to fix it: find each item on the page named above and replace it with your real details. Form fields must not be pre-filled with an example value – they need a neutral label, not a sample name or address.",
     },
     "contact.dead_ends_title": {
         "de": "{count} von {total} typischen Standard-URLs enden auf 404",

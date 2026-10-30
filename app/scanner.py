@@ -642,11 +642,56 @@ async def check_contact_legal(client: httpx.AsyncClient, base_url: str, homepage
             score -= 20
 
     # 4) Platzhalter-/Template-Reste
-    lower_combined = combined_html.lower()
-    placeholder_hits = {p for p in PLACEHOLDER_PATTERNS if re.search(p, lower_combined)}
+    #
+    #    Zwei Dinge anders als vorher:
+    #    a) Gesucht wird im SICHTBAREN Text statt im rohen HTML. "example.com"
+    #       steckt sonst in jedem zweiten Analytics-Schnipsel und in
+    #       Attributen, ohne dass eine Besucherin es je zu Gesicht bekommt -
+    #       das hat Beanstandungen erzeugt, die gar keine waren.
+    #    b) Gemeldet wird, WAS gefunden wurde und auf welcher Seite. Ein
+    #       blosses "Platzhalter gefunden" sagt dem Betreiber nicht, was er
+    #       ändern soll.
+    placeholder_hits: list = []       # (Fundstelle, Seite)
+    seen_hits: set = set()
+    for page_label, page_html in pages_html.items():
+        if not page_html:
+            continue
+        soup = BeautifulSoup(page_html, "html.parser")
+        for tag in soup(["script", "style", "noscript"]):
+            tag.decompose()
+        # Sichtbarer Fliesstext ...
+        quellen = [(soup.get_text(" ", strip=True), page_label)]
+
+        # ... und zusaetzlich die Vorbelegungen von Formularfeldern. Die
+        # stehen in Attributen und tauchen im Fliesstext nicht auf, waren
+        # aber genau das, was Google am Kontaktformular bemaengelt hat
+        # ("you@email.com", Mustername, Musterbestellnummer).
+        for feld in soup.find_all(["input", "textarea"]):
+            for attr in ("placeholder", "value"):
+                wert = (feld.get(attr) or "").strip()
+                if wert:
+                    quellen.append((wert, f"{page_label} (Formularfeld)"))
+
+        for text, herkunft in quellen:
+            lower_text = text.lower()
+            for pattern in PLACEHOLDER_PATTERNS:
+                for m in re.finditer(pattern, lower_text):
+                    fund = text[m.start():m.end()].strip()
+                    if not fund or fund.lower() in seen_hits:
+                        continue
+                    seen_hits.add(fund.lower())
+                    placeholder_hits.append((fund, herkunft))
+
     if placeholder_hits:
+        listing = "\n".join(
+            f"• „{fund}“ – auf {seite}" for fund, seite in placeholder_hits[:12]
+        )
+        if len(placeholder_hits) > 12:
+            listing += more_suffix(len(placeholder_hits) - 12, lang)
         findings.append(Finding(
-            "critical", t("contact.placeholder_title", lang), t("contact.placeholder_detail", lang),
+            "critical",
+            t("contact.placeholder_title", lang, count=len(placeholder_hits)),
+            t("contact.placeholder_detail", lang, listing=listing),
         ))
         score -= 25
 
