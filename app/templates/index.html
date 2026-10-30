@@ -33,7 +33,7 @@
       <nav class="nav-links">
         <a href="#features" data-i18n="nav.features">Prüfbereiche</a>
         <a href="#how" data-i18n="nav.how">So funktioniert's</a>
-        <a href="#pricing" data-i18n="nav.pricing">Preise</a>
+        {% if sales_enabled %}<a href="#pricing" data-i18n="nav.pricing">Preise</a>{% endif %}
         <a href="#why" data-i18n="nav.why">Warum GMCApprove</a>
       </nav>
       <div class="topbar-badges">
@@ -71,8 +71,17 @@
             Kostenlos scannen
           </button>
         </div>
+        <input
+          id="scan-key"
+          class="key-input"
+          type="text"
+          data-i18n-placeholder="hero.key_placeholder"
+          placeholder="Scan-Key (optional)"
+          autocomplete="off"
+          spellcheck="false"
+        />
         <p id="form-error" class="form-error" hidden></p>
-        <p class="price-note" data-i18n-html="hero.price_note">🎁 Erster Scan pro Store <strong>kostenlos</strong> – jeder weitere Scan derselben Domain kostet <strong>10&nbsp;€</strong>.</p>
+        <p class="price-note" data-i18n="hero.key_hint">Erster Scan pro Store kostenlos. Für jeden weiteren brauchst du einen Scan-Key.</p>
       </form>
 
       <div class="stat-row centered">
@@ -269,6 +278,7 @@
     </div>
     </section>
 
+    {% if sales_enabled %}
     <section class="band" id="pricing">
     <div class="container">
       <div class="section-head" style="padding-top:0;">
@@ -317,6 +327,7 @@
       <p class="pricing-footnote" data-i18n="pricing.footnote">Ein gekauftes Paket gilt nur für die gescannte Domain, nicht domainübergreifend.</p>
     </div>
     </section>
+    {% endif %}
 
     <section class="band band-alt" id="why">
     <div class="container why">

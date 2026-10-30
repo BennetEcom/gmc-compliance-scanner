@@ -239,9 +239,19 @@ async function pollScanResult(sessionId) {
   }
 }
 
+// Blendet Ladeanzeige und Report-Bereich aus, wenn ein angestossener Scan
+// doch nicht zu einem Report fuehrt - sonst laeuft der Fortschrittsbalken
+// neben der Fehlermeldung weiter.
+function resetReportView() {
+  stopLoadingAnimation();
+  reportSection.hidden = true;
+  reportLoading.hidden = true;
+}
+
 function showPackageNotice(storeUrl) {
   stopLoadingAnimation();
   reportSection.hidden = true;
+  if (!packageNotice) return;
   packageNotice.textContent = tUI("package.notice");
   packageNotice.hidden = false;
   document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -427,9 +437,11 @@ document.querySelectorAll("[data-package]").forEach((pkgBtn) => {
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   errBox.hidden = true;
-  packageNotice.hidden = true;
+  if (packageNotice) packageNotice.hidden = true;
 
   const url = document.getElementById("store-url").value.trim();
+  const keyField = document.getElementById("scan-key");
+  const key = keyField ? keyField.value.trim() : "";
 
   if (!url) {
     showError(tUI("err.empty_url"));
@@ -446,7 +458,7 @@ form.addEventListener("submit", async (e) => {
     const resp = await fetch("/api/start-scan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, lang: getLang() }),
+      body: JSON.stringify({ url, key: key || null, lang: getLang() }),
     });
 
     if (!resp.ok) {
@@ -466,11 +478,20 @@ form.addEventListener("submit", async (e) => {
       return;
     }
 
+    // Gratis-Scan dieser Domain ist aufgebraucht und es lag kein Key bei.
+    if (data.mode === "need_key") {
+      resetReportView();
+      showError(data.message || tUI("err.start_scan"));
+      if (keyField) keyField.focus();
+      return;
+    }
+
     if (data.mode === "direct") {
       await waitForMinDuration(scanStarted);
       renderReport(data.result);
     }
   } catch (e) {
+    resetReportView();
     showError(e.message || tUI("err.unknown"));
   } finally {
     btn.disabled = false;

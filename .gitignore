@@ -5,3 +5,7 @@ __pycache__/
 .venv/
 venv/
 .DS_Store
+
+# Klartext-Keys gehoeren NIE ins oeffentliche Repo
+keys-*.txt
+*keys-plain*

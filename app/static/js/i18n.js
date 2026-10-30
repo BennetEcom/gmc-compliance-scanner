@@ -16,6 +16,9 @@ const I18N = {
     en: "We check your entire store live against the most important Google&nbsp;Merchant&nbsp;Center policies – from policy pages to your product feed, fake reviews, and artificial urgency. A thorough scan of your whole store – results in minutes.",
   },
   "hero.input_placeholder": { de: "deinshop.myshopify.com", en: "yourshop.myshopify.com" },
+  "hero.key_placeholder": { de: "Scan-Key (optional)", en: "Scan key (optional)" },
+  "hero.key_hint": { de: "Erster Scan pro Store kostenlos. Für jeden weiteren brauchst du einen Scan-Key.", en: "First scan per store is free. Every further one needs a scan key." },
+  "err.key_unknown": { de: "Diesen Scan-Key kennen wir nicht. Format: GMCA-XXXXX-XXXXX-XXXXX.", en: "We don't recognise this scan key. Format: GMCA-XXXXX-XXXXX-XXXXX." },
   "hero.scan_btn": { de: "Kostenlos scannen", en: "Scan for free" },
   "hero.price_note": {
     de: "🎁 Erster Scan pro Store <strong>kostenlos</strong> – jeder weitere Scan derselben Domain kostet <strong>10&nbsp;€</strong>.",

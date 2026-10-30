@@ -180,6 +180,34 @@ h1 {
 }
 #store-url:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 4px rgba(47,111,235,0.14); }
 
+/* Scan-Key: zweite Zeile unter der URL, bewusst ruhiger als das Hauptfeld,
+   weil das Feld optional ist. Mono, damit sich die Bloecke beim Abtippen
+   gut auseinanderhalten lassen. */
+.key-input {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  margin: 10px auto 0;
+  padding: 11px 18px;
+  border-radius: 999px;
+  border: 1.5px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13.5px;
+  letter-spacing: 0.04em;
+  text-align: center;
+  text-transform: uppercase;
+  box-sizing: border-box;
+}
+.key-input::placeholder {
+  text-transform: none;
+  letter-spacing: normal;
+  font-family: inherit;
+  color: var(--text-dim);
+}
+.key-input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 4px rgba(47,111,235,0.14); }
+
 #scan-btn {
   padding: 15px 26px;
   border-radius: 999px;

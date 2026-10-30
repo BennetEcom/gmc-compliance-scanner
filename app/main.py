@@ -14,8 +14,10 @@ from app.config import (
     STRIPE_PUBLISHABLE_KEY,
     OWNER_BYPASS_CODE,
     STATS_ACCESS_CODE,
+    SALES_ENABLED,
     SCAN_PACKAGES,
 )
+from app import keys as scan_keys
 from app.i18n import resolve_lang, t
 from app.payments import (
     AllocationTooLargeError,
@@ -98,6 +100,7 @@ _stats = _load_stats()
 class StartScanRequest(BaseModel):
     url: str
     promo_owner_code: Optional[str] = None
+    key: Optional[str] = None
     lang: str = "de"
 
 
@@ -122,6 +125,7 @@ async def index(request: Request):
         {
             "request": request,
             "stripe_configured": is_stripe_configured(),
+            "sales_enabled": SALES_ENABLED,
             "asset_v": ASSET_VERSION,
             "pending_session_id": None,
             "initial_lang": lang,
@@ -147,10 +151,23 @@ async def api_start_scan(payload: StartScanRequest):
         _save_stats()
         return {"mode": "direct", "result": result}
 
-    # 2) Kein Stripe konfiguriert -> Scan ist aktuell kostenlos
-    if not is_stripe_configured():
+    # 2) Key eingelöst -> Scan unabhängig davon, ob die Domain ihren
+    #    kostenlosen Scan schon verbraucht hat. Der Key wird erst NACH dem
+    #    erfolgreichen Scan verbucht: stirbt der Scan unterwegs, ist der Key
+    #    nicht verloren.
+    if payload.key:
+        status, bound_url = scan_keys.check(payload.key)
+        if status == scan_keys.KeyStatus.UNKNOWN:
+            raise HTTPException(status_code=400, detail=t("err.key_unknown", lang))
+        if status == scan_keys.KeyStatus.USED:
+            raise HTTPException(
+                status_code=400,
+                detail=t("err.key_used", lang, url=urlparse(bound_url or "").netloc or "?"),
+            )
         result = await run_scan(normalized, lang)
-        result["_notice"] = t("notice.free_mode", lang)
+        scan_keys.redeem(payload.key, normalized)
+        left = scan_keys.stats()["left"]
+        result["_notice"] = t("notice.key_redeemed", lang, left=left)
         _stats["scans_completed"] += 1
         _stats["scanned_domains"].append(normalized)
         _save_stats()
@@ -159,7 +176,7 @@ async def api_start_scan(payload: StartScanRequest):
     # 3) Diese Domain wurde noch nie gescannt -> erster Scan ist gratis
     if normalized not in _stats["scanned_domains"]:
         result = await run_scan(normalized, lang)
-        result["_notice"] = t("notice.first_free", lang, price="10,00" if lang == "de" else "10.00")
+        result["_notice"] = t("notice.first_free_key", lang)
         _stats["scans_completed"] += 1
         _stats["scanned_domains"].append(normalized)
         _save_stats()
@@ -177,6 +194,11 @@ async def api_start_scan(payload: StartScanRequest):
         result["_notice"] = t("notice.credit_used", lang, remaining=credits - 1)
         return {"mode": "direct", "result": result}
 
+    # 5) Kein Gratis-Scan, kein Guthaben, kein Key -> es braucht einen Key.
+    #    Solange der Verkauf aus ist, gibt es keine Paket-Auswahl mehr.
+    if not SALES_ENABLED:
+        return {"mode": "need_key", "message": t("notice.need_key", lang)}
+
     return {
         "mode": "choose_package",
         "packages": {k: {"scans": v["scans"], "eur": v["eur"]} for k, v in SCAN_PACKAGES.items()},
@@ -185,6 +207,8 @@ async def api_start_scan(payload: StartScanRequest):
 
 @app.post("/api/buy-package")
 async def api_buy_package(payload: BuyPackageRequest):
+    if not SALES_ENABLED:
+        raise HTTPException(status_code=403, detail=t("err.sales_disabled", resolve_lang(payload.lang)))
     if payload.package not in SCAN_PACKAGES:
         raise HTTPException(status_code=400, detail="Ungültiges Paket")
 
@@ -232,6 +256,7 @@ async def scan_result_page(request: Request, session_id: Optional[str] = None, l
         {
             "request": request,
             "stripe_configured": is_stripe_configured(),
+            "sales_enabled": SALES_ENABLED,
             "asset_v": ASSET_VERSION,
             "pending_session_id": session_id,
             "initial_lang": resolved_lang,

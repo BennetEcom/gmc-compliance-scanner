@@ -10,6 +10,11 @@ OWNER_BYPASS_CODE = os.getenv("OWNER_BYPASS_CODE", "")
 APP_SECRET = os.getenv("APP_SECRET", "dev-secret-change-me")
 STATS_ACCESS_CODE = os.getenv("STATS_ACCESS_CODE", "")
 
+# Verkauf über Stripe ist vorerst abgeschaltet: gescannt wird über Keys.
+# Zum Wiedereinschalten SALES_ENABLED=true setzen – der gesamte Paket- und
+# Checkout-Code bleibt dafür erhalten.
+SALES_ENABLED = os.getenv("SALES_ENABLED", "false").strip().lower() in ("1", "true", "yes")
+
 # Scan-Pakete: jeder weitere Scan nach dem kostenlosen Erst-Scan wird über
 # eines dieser Pakete bezahlt. "scans" Guthaben wird pro Käufer (Browser-
 # Token, kein Login) über beliebig viele Domains hinweg verbraucht.
