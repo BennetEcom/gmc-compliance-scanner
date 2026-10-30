@@ -165,7 +165,6 @@ const I18N = {
 
   "footer.copyright_pre": { de: "©", en: "©" },
   "footer.copyright_post": { de: "Kein offizielles Google-Produkt, keine Haftung für Entscheidungen des Google Merchant Center.", en: "Not an official Google product, no liability for Google Merchant Center decisions." },
-  "footer.credit": { de: "Ein Produkt von Ecom Germany", en: "A product by Ecom Germany" },
 
   "report.title": { de: "Compliance Report", en: "Compliance Report" },
   "report.issues_heading": { de: "Alle offenen Punkte auf einen Blick", en: "All open issues at a glance" },

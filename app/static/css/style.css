@@ -674,7 +674,6 @@ h1 {
 }
 
 .footer { border-top: 1px solid var(--border); padding: 28px 0; color: var(--text-dim); font-size: 13px; text-align: center; }
-.footer-credit { margin: 6px 0 0; opacity: 0.7; }
 
 /* Mobile optimizations */
 @media (max-width: 640px) {
