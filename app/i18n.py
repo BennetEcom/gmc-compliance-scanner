@@ -49,21 +49,17 @@ _T: dict[str, dict[str, str]] = {
 
     # --- Notices ---
     "notice.free_mode": {"de": "Aktuell komplett kostenlos.", "en": "Currently completely free."},
-    "notice.first_free": {
-        "de": "Der erste Scan für diesen Store ist kostenlos. Ein erneuter Scan kostet {price} €.",
-        "en": "The first scan for this store is free. A repeat scan costs €{price}.",
-    },
     "notice.key_redeemed": {
         "de": "Key eingelöst. Dieser Scan ist damit bezahlt – der Key ist jetzt verbraucht und an diese Domain gebunden.",
         "en": "Key redeemed. This scan is paid for – the key is now used up and tied to this domain.",
     },
     "notice.first_free_key": {
-        "de": "Der erste Scan pro Store ist kostenlos – dieser hier war es. Für jeden weiteren Scan derselben Domain brauchst du einen Scan-Key.",
-        "en": "The first scan per store is free – this was it. Every further scan of the same domain needs a scan key.",
+        "de": "Scan abgeschlossen. Für einen weiteren Scan dieser Domain brauchst du einen Scan-Key.",
+        "en": "Scan complete. A further scan of this domain needs a scan key.",
     },
     "notice.need_key": {
-        "de": "Der kostenlose Scan für diese Domain wurde bereits genutzt. Trag einen Scan-Key ein, um sie erneut zu prüfen.",
-        "en": "The free scan for this domain has already been used. Enter a scan key to check it again.",
+        "de": "Für einen weiteren Scan dieser Domain brauchst du einen Scan-Key. Trag ihn oben ein und starte den Scan erneut.",
+        "en": "A further scan of this domain needs a scan key. Enter it above and start the scan again.",
     },
     "err.key_unknown": {
         "de": "Diesen Scan-Key kennen wir nicht. Bitte prüf die Schreibweise – das Format ist GMCA-XXXXX-XXXXX-XXXXX.",
