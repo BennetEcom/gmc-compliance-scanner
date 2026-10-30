@@ -15,6 +15,12 @@ STATS_ACCESS_CODE = os.getenv("STATS_ACCESS_CODE", "")
 # Checkout-Code bleibt dafür erhalten.
 SALES_ENABLED = os.getenv("SALES_ENABLED", "false").strip().lower() in ("1", "true", "yes")
 
+# Wo es die Scan-Keys zu kaufen gibt. Steht KEY_SHOP_URL nicht, erscheint der
+# Hinweis ohne Link - so stimmt der Satz auch, solange der Shop noch keine
+# Adresse hat. Beides sind reine Anzeigewerte, nichts hängt funktional daran.
+KEY_SHOP_URL = os.getenv("KEY_SHOP_URL", "").strip()
+KEY_SHOP_NAME = os.getenv("KEY_SHOP_NAME", "").strip()
+
 # Scan-Pakete: jeder weitere Scan nach dem kostenlosen Erst-Scan wird über
 # eines dieser Pakete bezahlt. "scans" Guthaben wird pro Käufer (Browser-
 # Token, kein Login) über beliebig viele Domains hinweg verbraucht.

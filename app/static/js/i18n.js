@@ -17,6 +17,8 @@ const I18N = {
   },
   "hero.input_placeholder": { de: "deinshop.myshopify.com", en: "yourshop.myshopify.com" },
   "hero.key_placeholder": { de: "Scan-Key (optional)", en: "Scan key (optional)" },
+  "hero.key_source_plain": { de: "Scan-Keys gibt es ausschließlich in unserem eigenen Shop. Keys aus anderen Quellen funktionieren nicht.", en: "Scan keys are available exclusively from our own shop. Keys from other sources will not work." },
+  "hero.key_source_pre": { de: "Scan-Keys gibt es ausschließlich in unserem eigenen Shop:", en: "Scan keys are available exclusively from our own shop:" },
   "hero.key_hint": { de: "Ein Scan-Key gilt für genau einen Scan einer Domain.", en: "One scan key is valid for exactly one scan of one domain." },
   "err.key_unknown": { de: "Diesen Scan-Key kennen wir nicht. Format: GMCA-XXXXX-XXXXX-XXXXX.", en: "We don't recognise this scan key. Format: GMCA-XXXXX-XXXXX-XXXXX." },
   "hero.scan_btn": { de: "Scan starten", en: "Start scan" },

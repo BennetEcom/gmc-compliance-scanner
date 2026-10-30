@@ -15,6 +15,8 @@ from app.config import (
     OWNER_BYPASS_CODE,
     STATS_ACCESS_CODE,
     SALES_ENABLED,
+    KEY_SHOP_URL,
+    KEY_SHOP_NAME,
     SCAN_PACKAGES,
 )
 from app import keys as scan_keys
@@ -71,6 +73,12 @@ def _load_stats() -> dict:
         data.setdefault("scans_completed", 0)
         data.setdefault("scanned_domains", [])
         data.setdefault("credits", {})
+        # Scan-Verlauf mit Zeitpunkt. Früher wurde nur die URL angehängt,
+        # ohne jedes Datum – Fragen wie "welche Stores letzte Woche?" waren
+        # damit nicht beantwortbar. Altbestand wandert einmalig mit at=None
+        # in den Verlauf, damit die Historie nicht bei null anfängt.
+        if "scan_log" not in data:
+            data["scan_log"] = [{"url": u, "at": None, "via": "unbekannt"} for u in data["scanned_domains"]]
         return data
     except (OSError, json.JSONDecodeError):
         return {
@@ -79,6 +87,7 @@ def _load_stats() -> dict:
             "scans_started": 0,
             "scans_completed": 0,
             "scanned_domains": [],
+            "scan_log": [],
             "credits": {},
         }
 
@@ -95,6 +104,20 @@ def _save_stats() -> None:
 
 
 _stats = _load_stats()
+
+
+def _record_scan(url: str, via: str) -> None:
+    """Hält einen abgeschlossenen Scan fest: für das Bezahl-Gate (Liste der
+    Domains) und für die Auswertung (Verlauf mit Zeitpunkt und Anlass).
+    via ist einer von: free, key, credit, owner, paket."""
+    _stats["scanned_domains"].append(url)
+    _stats["scan_log"].append({
+        "url": url,
+        "at": datetime.now(timezone.utc).isoformat(),
+        "via": via,
+    })
+    _stats["scans_completed"] += 1
+    _save_stats()
 
 
 class StartScanRequest(BaseModel):
@@ -126,6 +149,8 @@ async def index(request: Request):
             "request": request,
             "stripe_configured": is_stripe_configured(),
             "sales_enabled": SALES_ENABLED,
+            "key_shop_url": KEY_SHOP_URL,
+            "key_shop_name": KEY_SHOP_NAME,
             "asset_v": ASSET_VERSION,
             "pending_session_id": None,
             "initial_lang": lang,
@@ -146,9 +171,7 @@ async def api_start_scan(payload: StartScanRequest):
     # 1) Owner-Bypass: kostenlos scannen, kein Stripe nötig
     if OWNER_BYPASS_CODE and payload.promo_owner_code and payload.promo_owner_code == OWNER_BYPASS_CODE:
         result = await run_scan(normalized, lang)
-        _stats["scans_completed"] += 1
-        _stats["scanned_domains"].append(normalized)
-        _save_stats()
+        _record_scan(normalized, "owner")
         return {"mode": "direct", "result": result}
 
     # 2) Key eingelöst -> Scan unabhängig davon, ob die Domain ihren
@@ -168,18 +191,14 @@ async def api_start_scan(payload: StartScanRequest):
         scan_keys.redeem(payload.key, normalized)
         left = scan_keys.stats()["left"]
         result["_notice"] = t("notice.key_redeemed", lang, left=left)
-        _stats["scans_completed"] += 1
-        _stats["scanned_domains"].append(normalized)
-        _save_stats()
+        _record_scan(normalized, "key")
         return {"mode": "direct", "result": result}
 
     # 3) Diese Domain wurde noch nie gescannt -> erster Scan ist gratis
     if normalized not in _stats["scanned_domains"]:
         result = await run_scan(normalized, lang)
         result["_notice"] = t("notice.first_free_key", lang)
-        _stats["scans_completed"] += 1
-        _stats["scanned_domains"].append(normalized)
-        _save_stats()
+        _record_scan(normalized, "free")
         return {"mode": "direct", "result": result}
 
     # 4) Domain wurde bereits gescannt -> vorhandenes Guthaben DIESER Domain
@@ -188,9 +207,7 @@ async def api_start_scan(payload: StartScanRequest):
     if credits > 0:
         result = await run_scan(normalized, lang)
         _stats["credits"][normalized] = credits - 1
-        _stats["scans_completed"] += 1
-        _stats["scanned_domains"].append(normalized)
-        _save_stats()
+        _record_scan(normalized, "credit")
         result["_notice"] = t("notice.credit_used", lang, remaining=credits - 1)
         return {"mode": "direct", "result": result}
 
@@ -257,6 +274,8 @@ async def scan_result_page(request: Request, session_id: Optional[str] = None, l
             "request": request,
             "stripe_configured": is_stripe_configured(),
             "sales_enabled": SALES_ENABLED,
+            "key_shop_url": KEY_SHOP_URL,
+            "key_shop_name": KEY_SHOP_NAME,
             "asset_v": ASSET_VERSION,
             "pending_session_id": session_id,
             "initial_lang": resolved_lang,
@@ -296,9 +315,7 @@ async def api_scan_result(session_id: str):
         result["_notice"] = t("notice.package_bought", paid.lang, remaining=_stats["credits"].get(first_url, 0))
 
     cache_result(session_id, result)
-    _stats["scans_completed"] += 1
-    _stats["scanned_domains"].append(first_url)
-    _save_stats()
+    _record_scan(first_url, "paket")
     return result
 
 
@@ -317,8 +334,40 @@ async def api_stats(code: str = ""):
         raise HTTPException(status_code=404)
     domains = _stats["scanned_domains"]
     recent = list(reversed(domains))[:20]
+    from collections import Counter
+    from datetime import timedelta
+
+    log = _stats.get("scan_log", [])
+    now = datetime.now(timezone.utc)
+
+    def _within(days: int) -> list:
+        grenze = now - timedelta(days=days)
+        out = []
+        for e in log:
+            if not e.get("at"):
+                continue  # Altbestand ohne Zeitpunkt zaehlt nicht mit
+            try:
+                if datetime.fromisoformat(e["at"]) >= grenze:
+                    out.append(e)
+            except ValueError:
+                continue
+        return out
+
+    def _auswertung(days: int) -> dict:
+        eintraege = _within(days)
+        zaehler = Counter(urlparse(e["url"]).netloc.lower().removeprefix("www.") for e in eintraege)
+        return {
+            "scans": len(eintraege),
+            "domains": len(zaehler),
+            "je_domain": dict(zaehler.most_common()),
+        }
+
     return {
-        **{k: v for k, v in _stats.items() if k not in ("scanned_domains", "credits")},
+        **{k: v for k, v in _stats.items() if k not in ("scanned_domains", "scan_log", "credits")},
+        "letzte_7_tage": _auswertung(7),
+        "letzte_30_tage": _auswertung(30),
+        "letzte_scans": list(reversed(log))[:25],
+        "ohne_zeitstempel": sum(1 for e in log if not e.get("at")),
         "unique_domains_scanned": len(set(domains)),
         "most_recent_domains": recent,
         "domains_with_credit": len([1 for c in _stats["credits"].values() if c > 0]),

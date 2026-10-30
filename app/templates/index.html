@@ -82,6 +82,7 @@
         />
         <p id="form-error" class="form-error" hidden></p>
         <p class="price-note" data-i18n="hero.key_hint">Ein Scan-Key gilt für genau einen Scan einer Domain.</p>
+        <p class="key-source">{% if key_shop_url %}<span data-i18n="hero.key_source_pre">Scan-Keys gibt es ausschließlich in unserem eigenen Shop:</span> <a href="{{ key_shop_url }}" rel="noopener" target="_blank">{{ key_shop_name or key_shop_url }}</a>{% else %}<span data-i18n="hero.key_source_plain">Scan-Keys gibt es ausschließlich in unserem eigenen Shop. Keys aus anderen Quellen funktionieren nicht.</span>{% endif %}</p>
       </form>
 
       <div class="stat-row centered">
