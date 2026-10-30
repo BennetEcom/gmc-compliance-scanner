@@ -253,9 +253,17 @@ _T: dict[str, dict[str, str]] = {
         "de": "{count} von {total} typischen Standard-URLs enden auf 404",
         "en": "{count} of {total} typical standard URLs end in 404",
     },
+    "contact.dead_ends_unverified_title": {
+        "de": "{count} Standard-URL(s) nicht abschließend prüfbar",
+        "en": "{count} standard URL(s) could not be checked conclusively",
+    },
+    "contact.dead_ends_unverified_detail": {
+        "de": "{listing}\n\nDer Shop hat auf diese Adressen mit einem anderen Fehler als 404 geantwortet – typisch für Bot-Schutz oder ein Tempolimit während des Scans. Das ist KEINE Beanstandung: ob die Seiten existieren, konnten wir nur nicht feststellen.",
+        "en": "{listing}\n\nThe store answered these addresses with an error other than 404 – typically bot protection or rate limiting during the scan. This is NOT a finding: we simply could not determine whether the pages exist.",
+    },
     "contact.dead_ends_detail": {
-        "de": "{listing}\nNicht kritisch, wenn diese Seiten nie existiert haben – idealerweise leiten geratene Standard-URLs auf eine echte Seite weiter statt auf einen Fehler.",
-        "en": "{listing}\nNot critical if these pages never existed – ideally, guessed standard URLs should redirect to a real page instead of an error.",
+        "de": "{listing}\n\nGeprüft wird hier die ADRESSE, nicht der Inhalt: Google-Reviewer tippen solche Standard-URLs von Hand ein. Gibt es die Seite bei dir unter einer anderen Adresse – etwa /pages/ueber-uns statt /pages/about-us –, leg in Shopify unter Weiterleitungen eine Umleitung an. Dann verschwindet der Punkt beim nächsten Scan.",
+        "en": "{listing}\n\nWhat is checked here is the ADDRESS, not the content: Google reviewers type such standard URLs by hand. If the page exists under a different address on your store – say /pages/about rather than /pages/about-us – set up a URL redirect in Shopify. The item then disappears on the next scan.",
     },
 
     # --- 5) Produkt-Feed ---

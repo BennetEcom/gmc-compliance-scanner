@@ -60,6 +60,12 @@ DEFAULT_HEADERS = {
     "User-Agent": USER_AGENT,
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
     "Accept-Language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7",
+    # Ein Scan soll den JETZIGEN Zustand des Shops sehen. Shopify liefert
+    # zwar "no-store" aus, andere Plattformen und zwischengeschaltete Proxys
+    # aber sehr wohl Zwischenstände - dann wird eine gerade behobene
+    # Beanstandung erneut gemeldet.
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
 }
 
 REQUEST_TIMEOUT = httpx.Timeout(10.0, connect=6.0)
@@ -644,11 +650,39 @@ async def check_contact_legal(client: httpx.AsyncClient, base_url: str, homepage
         ))
         score -= 25
 
-    # 5) Erratbare Standard-Pfade dürfen nicht auf 404 enden
+    # 5) Erratbare Standard-Pfade dürfen nicht auf 404 enden.
+    #
+    #    Vorher galt hier JEDER Fehler als Sackgasse - auch 403 (Bot-Schutz),
+    #    429 (Rate-Limit) und Zeitüberschreitungen, und das bei einem
+    #    einzigen Versuch ohne Wiederholung. Diese acht Anfragen laufen
+    #    zusammen mit hunderten anderen durch dasselbe Nadelöhr von vier
+    #    gleichzeitigen Verbindungen; unter Last meldet der Shop deshalb
+    #    regelmäßig 429 statt 404. Ergebnis: eine gerade angelegte Seite
+    #    wurde weiter als fehlend geführt, obwohl sie längst da war.
+    #    Jetzt zählt nur ein bestätigtes 404, und alles andere wird mit
+    #    wachsendem Abstand gegengeprüft - wie bei der Broken-Link-Prüfung.
+    unverified: list[str] = []
+
     async def check_guess(path: str):
-        resp = await fetch(client, urljoin(base_url, path))
-        if isinstance(resp, Exception) or resp.status_code >= 400:
+        url = urljoin(base_url, path)
+
+        async def attempt():
+            resp = await fetch(client, url)
+            if isinstance(resp, Exception):
+                return None
+            return resp.status_code
+
+        status = await attempt()
+        for delay in (1.5, 3.0):
+            if status == 404 or (status is not None and status < 400):
+                break
+            await asyncio.sleep(delay)
+            status = await attempt()
+
+        if status == 404:
             return path
+        if status is None or status >= 400:
+            unverified.append(path)
         return None
 
     dead_ends = [p for p in await asyncio.gather(*(check_guess(p) for p in GUESSED_PATHS)) if p]
@@ -659,6 +693,14 @@ async def check_contact_legal(client: httpx.AsyncClient, base_url: str, homepage
             t("contact.dead_ends_detail", lang, listing=listing),
         ))
         score -= min(10, len(dead_ends) * 2)
+    if unverified:
+        # Lieber offen sagen, dass wir es nicht beurteilen konnten, als eine
+        # Beanstandung zu erfinden.
+        findings.append(Finding(
+            "info", t("contact.dead_ends_unverified_title", lang, count=len(unverified)),
+            t("contact.dead_ends_unverified_detail", lang,
+              listing="\n".join(f"• {base_url}{p}" for p in unverified)),
+        ))
 
     score = max(0, min(100, score))
     return CategoryResult("contact_legal", t("cat.contact_legal", lang), score, findings)
