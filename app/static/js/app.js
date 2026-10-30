@@ -100,6 +100,27 @@ function stopLoadingAnimation() {
   document.querySelectorAll("#loading-steps li").forEach((el) => el.classList.remove("active"));
 }
 
+// Der Scan-Zeitpunkt kommt als ISO-Zeichenkette vom Server. Im PDF ist er
+// die wichtigste Angabe ueberhaupt: ein Compliance-Bericht ohne Datum ist
+// wertlos, weil sich der Shop taeglich aendern kann.
+function formatScanDate(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  return d.toLocaleString(getLang() === "de" ? "de-DE" : "en-GB", {
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit",
+  });
+}
+
+// Kein PDF-Erzeuger auf dem Server: der wuerde schwere Systembibliotheken
+// und Arbeitsspeicher brauchen, und davon ist auf dem kleinen Plan ohnehin
+// zu wenig da. Der Browser kann es besser - das Ergebnis ist ein echtes
+// PDF mit auswaehlbarem Text statt eines Bildes.
+function printReport() {
+  window.print();
+}
+
 function renderReport(result) {
   stopLoadingAnimation();
   updateHeroPreview(result);
@@ -177,6 +198,8 @@ function renderReport(result) {
     <div class="report-header">
       <h2>${tUI("report.title")}</h2>
       <div class="url">${result.url}</div>
+      <div class="report-date">${formatScanDate(result.scanned_at)}</div>
+      <button type="button" id="report-pdf" class="report-pdf-btn">${tUI("report.save_pdf")}</button>
       <div class="report-ring">
         <svg viewBox="0 0 120 120">
           <circle cx="60" cy="60" r="52" class="ring-bg" />
@@ -200,6 +223,9 @@ function renderReport(result) {
       <ul class="checklist">${checklistHtml}</ul>
     </div>
   `;
+
+  const pdfBtn = document.getElementById("report-pdf");
+  if (pdfBtn) pdfBtn.addEventListener("click", printReport);
 
   reportContent.scrollIntoView({ behavior: "smooth", block: "start" });
 }

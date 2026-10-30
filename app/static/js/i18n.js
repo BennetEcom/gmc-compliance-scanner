@@ -20,6 +20,7 @@ const I18N = {
   "hero.key_source_plain": { de: "Scan-Keys gibt es ausschließlich in unserem eigenen Shop. Keys aus anderen Quellen funktionieren nicht.", en: "Scan keys are available exclusively from our own shop. Keys from other sources will not work." },
   "hero.key_source_pre": { de: "Scan-Keys gibt es ausschließlich in unserem eigenen Shop:", en: "Scan keys are available exclusively from our own shop:" },
   "hero.key_hint": { de: "Ohne Scan-Key kein Scan. Ein Key gilt für genau einen Scan einer Domain.", en: "No scan without a scan key. One key is valid for exactly one scan of one domain." },
+  "report.save_pdf": { de: "Als PDF speichern", en: "Save as PDF" },
   "err.key_required": { de: "Für einen Scan brauchst du einen Scan-Key. Trag ihn im Feld darunter ein.", en: "Scanning requires a scan key. Enter it in the field below." },
   "err.key_unknown": { de: "Diesen Scan-Key kennen wir nicht. Format: GMCA-XXXXX-XXXXX-XXXXX.", en: "We don't recognise this scan key. Format: GMCA-XXXXX-XXXXX-XXXXX." },
   "hero.scan_btn": { de: "Scan starten", en: "Start scan" },
