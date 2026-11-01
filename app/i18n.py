@@ -58,8 +58,16 @@ _T: dict[str, dict[str, str]] = {
         "en": "Scanning works exclusively with a scan key. Enter your key above and start the scan again.",
     },
     "err.key_unknown": {
-        "de": "Diesen Scan-Key kennen wir nicht. Bitte prüf die Schreibweise – das Format ist GMCA-XXXXX-XXXXX-XXXXX.",
-        "en": "We don't recognise this scan key. Please check the spelling – the format is GMCA-XXXXX-XXXXX-XXXXX.",
+        "de": "Diesen Code kennen wir nicht. Bitte prüf die Schreibweise – gültig sind GMCA-XXXXX-XXXXX-XXXXX und GMCP-XXXXX-XXXXX-XXXXX.",
+        "en": "We don't recognise this code. Please check the spelling – valid formats are GMCA-XXXXX-XXXXX-XXXXX and GMCP-XXXXX-XXXXX-XXXXX.",
+    },
+    "notice.pass_ok": {
+        "de": "Dauer-Code erkannt. Er gilt unbegrenzt und für beliebige Domains – dieser Scan verbraucht nichts.",
+        "en": "Permanent code recognised. It is valid indefinitely and for any domain – this scan uses nothing up.",
+    },
+    "err.pass_revoked": {
+        "de": "Dieser Dauer-Code wurde gesperrt und gilt nicht mehr. Bitte wende dich an den Betreiber.",
+        "en": "This permanent code has been revoked and is no longer valid. Please contact the operator.",
     },
     "err.key_used": {
         "de": "Dieser Scan-Key wurde bereits für {url} eingelöst. Jeder Key gilt für genau einen Scan.",

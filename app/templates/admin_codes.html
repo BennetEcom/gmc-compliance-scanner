@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Dauer-Codes – GMCApprove</title>
+<style>
+  :root {
+    --bg: #f6f7f8; --panel: #fff; --line: #d9dde1; --text: #1c2024;
+    --muted: #666f78; --accent: #1a56db; --off: #b42318; --ok: #067647;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px 20px 64px; background: var(--bg); color: var(--text);
+         font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  h1 { font-size: 21px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 24px; }
+  .zahlen { display: flex; gap: 28px; flex-wrap: wrap; padding: 14px 18px; margin-bottom: 20px;
+            background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+  .zahlen div { font-size: 13px; color: var(--muted); }
+  .zahlen b { display: block; font-size: 20px; color: var(--text); font-variant-numeric: tabular-nums; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel);
+          border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); font-size: 14px; }
+  th { background: #eef0f2; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  tr:last-child td { border-bottom: 0; }
+  tr.gesperrt td:not(.aktion) { opacity: .5; }
+  td.id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
+  td.zahl { font-variant-numeric: tabular-nums; }
+  .status { font-size: 12px; font-weight: 600; }
+  .status.aktiv { color: var(--ok); }
+  .status.aus { color: var(--off); }
+  input.label { width: 100%; max-width: 190px; padding: 5px 7px; font: inherit; font-size: 13px;
+                border: 1px solid var(--line); border-radius: 4px; background: #fbfcfc; }
+  input.label:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+  button { font: inherit; font-size: 13px; padding: 5px 11px; border-radius: 4px; cursor: pointer;
+           border: 1px solid var(--line); background: #fff; color: var(--text); }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.sperren:hover { border-color: var(--off); color: var(--off); }
+  button[disabled] { opacity: .5; cursor: default; }
+  .hinweis { margin-top: 20px; padding: 13px 16px; background: #fff; border: 1px solid var(--line);
+             border-left: 3px solid var(--accent); border-radius: 4px; font-size: 13px; color: var(--muted); }
+  .hinweis p { margin: 0 0 7px; }
+  .hinweis p:last-child { margin: 0; }
+  .meldung { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+             background: var(--text); color: #fff; padding: 9px 16px; border-radius: 5px;
+             font-size: 13px; opacity: 0; transition: opacity .18s; pointer-events: none; }
+  .meldung.an { opacity: 1; }
+  @media (max-width: 620px) {
+    td.letzte, th.letzte { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Dauer-Codes</h1>
+  <p class="sub">Unbegrenzt nutzbar, für beliebig viele Scans und beliebige Domains – bis sie hier gesperrt
+     werden. Eine Sperre wirkt sofort, ohne Deploy.</p>
+
+  <div class="zahlen">
+    <div>Aktiv<b id="z-aktiv">{{ pass_stats.active }}</b></div>
+    <div>Gesperrt<b id="z-aus">{{ pass_stats.revoked }}</b></div>
+    <div>Scans darüber<b>{{ pass_stats.scans }}</b></div>
+    <div>Einmal-Keys übrig<b>{{ key_stats.left }}</b> </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Wer hat ihn</th>
+        <th>Status</th>
+        <th>Scans</th>
+        <th class="letzte">Zuletzt</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in passes %}
+      <tr data-id="{{ p.id }}" class="{{ 'gesperrt' if p.revoked else '' }}">
+        <td class="id">{{ p.id }}</td>
+        <td><input class="label" type="text" value="{{ p.label }}" placeholder="Notiz, z. B. Name"
+                   aria-label="Notiz zu {{ p.id }}"></td>
+        <td><span class="status {{ 'aus' if p.revoked else 'aktiv' }}">{{ 'Gesperrt' if p.revoked else 'Aktiv' }}</span></td>
+        <td class="zahl">{{ p.uses }}</td>
+        <td class="letzte">{{ p.last_at[:16].replace('T', ' ') if p.last_at else '–' }}</td>
+        <td class="aktion">
+          <button class="{{ '' if p.revoked else 'sperren' }}">{{ 'Freigeben' if p.revoked else 'Sperren' }}</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="hinweis">
+    <p><strong>Die Codes selbst stehen hier nicht.</strong> Der Server kennt nur ihre Prüfsummen, nicht den
+       Klartext – deshalb wird über die kurze ID gesperrt. Welche ID zu welchem Code gehört, steht in der
+       Klartext-Liste beim Betreiber.</p>
+    <p>Gesperrt heißt: der Code wird beim nächsten Scan-Versuch abgewiesen. Freigeben macht ihn wieder
+       gültig, die bisherigen Scans bleiben gezählt.</p>
+  </div>
+</div>
+
+<div class="meldung" id="meldung"></div>
+
+<script>
+const CODE = {{ access_code | tojson }};
+const meldung = document.getElementById("meldung");
+let timer;
+
+function sagen(text) {
+  meldung.textContent = text;
+  meldung.classList.add("an");
+  clearTimeout(timer);
+  timer = setTimeout(() => meldung.classList.remove("an"), 2600);
+}
+
+async function senden(pfad, ident, extra = {}) {
+  const res = await fetch("/api/admin/pass/" + pfad, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code: CODE, ident, ...extra }),
+  });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(d.detail || "Fehlgeschlagen (" + res.status + ")");
+  }
+  return res.json();
+}
+
+document.querySelectorAll("tbody tr").forEach((zeile) => {
+  const id = zeile.dataset.id;
+  const knopf = zeile.querySelector("button");
+  const status = zeile.querySelector(".status");
+  const feld = zeile.querySelector("input.label");
+
+  knopf.addEventListener("click", async () => {
+    const sperren = status.classList.contains("aktiv");
+    knopf.disabled = true;
+    try {
+      const d = await senden(sperren ? "revoke" : "restore", id);
+      status.classList.toggle("aktiv", !d.revoked);
+      status.classList.toggle("aus", d.revoked);
+      status.textContent = d.revoked ? "Gesperrt" : "Aktiv";
+      knopf.textContent = d.revoked ? "Freigeben" : "Sperren";
+      knopf.classList.toggle("sperren", !d.revoked);
+      zeile.classList.toggle("gesperrt", d.revoked);
+      document.getElementById("z-aktiv").textContent = d.stats.active;
+      document.getElementById("z-aus").textContent = d.stats.revoked;
+      sagen(id + (d.revoked ? " gesperrt" : " wieder freigegeben"));
+    } catch (e) {
+      sagen(e.message);
+    } finally {
+      knopf.disabled = false;
+    }
+  });
+
+  // Notiz beim Verlassen des Feldes speichern - kein Speichern-Knopf noetig.
+  let gespeichert = feld.value;
+  feld.addEventListener("blur", async () => {
+    if (feld.value === gespeichert) return;
+    try {
+      await senden("label", id, { label: feld.value });
+      gespeichert = feld.value;
+      sagen("Notiz zu " + id + " gespeichert");
+    } catch (e) {
+      feld.value = gespeichert;
+      sagen(e.message);
+    }
+  });
+});
+</script>
+</body>
+</html>

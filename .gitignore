@@ -9,3 +9,7 @@ venv/
 # Klartext-Keys gehoeren NIE ins oeffentliche Repo
 keys-*.txt
 *keys-plain*
+
+# Dauer-Codes im Klartext ebenfalls nie ins Repo
+dauer-codes-*.txt
+ausgegeben.txt

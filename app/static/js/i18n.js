@@ -22,7 +22,7 @@ const I18N = {
   "hero.key_hint": { de: "Ohne Scan-Key kein Scan. Ein Key gilt für genau einen Scan einer Domain.", en: "No scan without a scan key. One key is valid for exactly one scan of one domain." },
   "report.save_pdf": { de: "Als PDF speichern", en: "Save as PDF" },
   "err.key_required": { de: "Für einen Scan brauchst du einen Scan-Key. Trag ihn im Feld darunter ein.", en: "Scanning requires a scan key. Enter it in the field below." },
-  "err.key_unknown": { de: "Diesen Scan-Key kennen wir nicht. Format: GMCA-XXXXX-XXXXX-XXXXX.", en: "We don't recognise this scan key. Format: GMCA-XXXXX-XXXXX-XXXXX." },
+  "err.key_unknown": { de: "Diesen Code kennen wir nicht. Format: GMCA-XXXXX-XXXXX-XXXXX oder GMCP-XXXXX-XXXXX-XXXXX.", en: "We don't recognise this code. Format: GMCA-XXXXX-XXXXX-XXXXX or GMCP-XXXXX-XXXXX-XXXXX." },
   "hero.scan_btn": { de: "Scan starten", en: "Start scan" },
   "hero.stat1_label": { de: "neuer Dropshipping-Stores scheitern an mind. 1 GMC-Check", en: "of new dropshipping stores fail at least 1 GMC check" },
   "hero.stat2_label": { de: "Prüfbereiche in einem Scan", en: "check categories in one scan" },

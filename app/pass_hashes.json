@@ -1,0 +1,127 @@
+{
+ "algo": "sha256",
+ "count": 30,
+ "note": "Dauer-Codes: unbegrenzt nutzbar, bis sie gesperrt werden. Klartext liegt nur beim Betreiber.",
+ "passes": [
+  {
+   "id": "P01",
+   "hash": "a9670baf1db7d040e9e7ba2128dbe86a844282f7d33d433f242ea621f985aede"
+  },
+  {
+   "id": "P02",
+   "hash": "41510591ca57a0a9efeeb80868691cc25a1f549c06af977377a70b4ca2bc0abf"
+  },
+  {
+   "id": "P03",
+   "hash": "8867e8f49a590dd398e665648451692b189c576010b5e1fd4eee7d03d9a05168"
+  },
+  {
+   "id": "P04",
+   "hash": "039e626cea970a8b412f25aeddb1ce9156062476a41b99ef015e7736bf8c16cc"
+  },
+  {
+   "id": "P05",
+   "hash": "dcffab4425fc822f582b7d19687abe5cf84f67bd1c84f9e26705da9a2698a203"
+  },
+  {
+   "id": "P06",
+   "hash": "ac498164554c2f03a09037de626b1ae7242ef0803eb7c8f2c84854e72a02f910"
+  },
+  {
+   "id": "P07",
+   "hash": "a497b9e31eb61555b0880e9ff69b1061da8cb9e4a7e3fb0dd57c3d74b9dd29f6"
+  },
+  {
+   "id": "P08",
+   "hash": "c4ffac5fe4636417909b94e161db674b26b6f5fb8daed712cec00dd5908c5ebc"
+  },
+  {
+   "id": "P09",
+   "hash": "a74b276591068c39ff40c226de50674012d4ddd00a18d776063ea30bf6768b2e"
+  },
+  {
+   "id": "P10",
+   "hash": "7a4d04137b67992b419b9fa5e78404a3def2d53179b088bd248a4a9d790b3a98"
+  },
+  {
+   "id": "P11",
+   "hash": "890e270a20f4e6a105df49e00a1f94d3dcda31a74b7fcd00626e959c5747e6ae"
+  },
+  {
+   "id": "P12",
+   "hash": "66e603dcfa4bdc433d2b7a5be6cdecde03d8393adbb9709b85d38782c226ed04"
+  },
+  {
+   "id": "P13",
+   "hash": "9c596f26b98b32cefcd7e3832d492e38ea38d0bb5aa065f36f50014a448e035f"
+  },
+  {
+   "id": "P14",
+   "hash": "63a63f5f9b2e1d7ae2e4e961b93b8b8b274c4ce89fbdd6b1c3cb499b11c27568"
+  },
+  {
+   "id": "P15",
+   "hash": "37837cd591ca7b6594b6cd886cd0c91ed9fe299afedc3fae75ffc55084182b36"
+  },
+  {
+   "id": "P16",
+   "hash": "8dcadb504253a499c1ca53598118880a25808f29b6021bc318bbf16fbdac5faa"
+  },
+  {
+   "id": "P17",
+   "hash": "c3a3bd100ad6ca62e214d2f05a65b30fd55e9696de5a27511133551b9ea90220"
+  },
+  {
+   "id": "P18",
+   "hash": "97fb46265129aa3165e21f2c32dce519e21cb627411e1f11e9c314c3e7fc9edc"
+  },
+  {
+   "id": "P19",
+   "hash": "964b193a73d692ec64590ff7fff45f6439997f623aec70bb7d402d88e9edaa83"
+  },
+  {
+   "id": "P20",
+   "hash": "a4440acb03f8a778519d8f8e9448b747b18e2f66617d8b4332d3bfa68fc49d79"
+  },
+  {
+   "id": "P21",
+   "hash": "ce38c4893cc09cf8633a336eaa4813e86cdb5d3a85c73c572dde227c9ba259b2"
+  },
+  {
+   "id": "P22",
+   "hash": "ba3d69d0715726755be48c3f61165141c626e881b56dada34bb5852b6758ed98"
+  },
+  {
+   "id": "P23",
+   "hash": "d8daf82a9b029282f59b975c1b998cd38bfc13804c3413fafea1fba354b3d445"
+  },
+  {
+   "id": "P24",
+   "hash": "403982bd9639249d78e6c826fd8acef2501a2e0b693071ee4a18787cbe7e04d1"
+  },
+  {
+   "id": "P25",
+   "hash": "580f555ff9062f2b41bf05d7e7e81bf09d422911d5279971d160bc53a5857169"
+  },
+  {
+   "id": "P26",
+   "hash": "1ea97141adb0ae9d859902c8140427fdf30a28c07cc9408401dd9bcad4617d64"
+  },
+  {
+   "id": "P27",
+   "hash": "28bc776b08b512e9a9cf23568d302c03564e015dda6e843406100203cf71ad06"
+  },
+  {
+   "id": "P28",
+   "hash": "4befaaaa2b830d2e19d9956e212479ed42660d9a6f239c60e87fae53d688707e"
+  },
+  {
+   "id": "P29",
+   "hash": "928f4157c5a3898cd6740055feb9d7320c9e0213d536d9ee9e07f7958e363c3d"
+  },
+  {
+   "id": "P30",
+   "hash": "6a313c764e231f8be9d16d3fb736940b77acb988f94b3002c337bdb3babe3a25"
+  }
+ ]
+}

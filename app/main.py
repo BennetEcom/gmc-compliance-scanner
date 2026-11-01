@@ -174,9 +174,25 @@ async def api_start_scan(payload: StartScanRequest):
         _record_scan(normalized, "owner")
         return {"mode": "direct", "result": result}
 
-    # 2) Ohne Key kein Scan. Der Key wird erst NACH dem erfolgreichen Scan
-    #    verbucht: stirbt der Scan unterwegs, ist der Key nicht verloren.
+    # 2) Ohne Code kein Scan. Zwei Arten sind gültig:
+    #    Dauer-Code (GMCP-...)  -> unbegrenzt, bis er gesperrt wird
+    #    Einmal-Key (GMCA-...)  -> genau ein Scan auf genau einer Domain
+    #    Geprüft wird der Dauer-Code zuerst, denn nur er kann den Scan
+    #    erlauben, ohne etwas zu verbrauchen.
     if payload.key:
+        pass_status, pass_id = scan_keys.check_pass(payload.key)
+        if pass_status == scan_keys.PassStatus.REVOKED:
+            raise HTTPException(status_code=400, detail=t("err.pass_revoked", lang))
+        if pass_status == scan_keys.PassStatus.OK:
+            result = await run_scan(normalized, lang)
+            scan_keys.note_pass_use(pass_id, normalized)
+            result["_notice"] = t("notice.pass_ok", lang)
+            _record_scan(normalized, "pass")
+            return {"mode": "direct", "result": result}
+
+        # Kein Dauer-Code -> als Einmal-Key prüfen. Der wird erst NACH dem
+        # erfolgreichen Scan verbucht: stirbt der Scan unterwegs, ist der
+        # Key nicht verloren.
         status, bound_url = scan_keys.check(payload.key)
         if status == scan_keys.KeyStatus.UNKNOWN:
             raise HTTPException(status_code=400, detail=t("err.key_unknown", lang))
@@ -363,6 +379,63 @@ async def api_stats(code: str = ""):
         "domains_with_credit": len([1 for c in _stats["credits"].values() if c > 0]),
         "note": "Wird auf einer Render Persistent Disk gespeichert (falls gemountet) und übersteht damit Deploys/Neustarts.",
     }
+
+
+class PassActionRequest(BaseModel):
+    """code ist der Zugangscode des Betreibers, ident die Kurz-ID (P07) oder
+    der Dauer-Code im Klartext."""
+    code: str
+    ident: str
+    label: Optional[str] = None
+
+
+def _require_admin(code: str) -> None:
+    # 404 statt 403: wer den Zugangscode nicht hat, soll nicht einmal
+    # erfahren, dass es diese Seite gibt.
+    if not STATS_ACCESS_CODE or code != STATS_ACCESS_CODE:
+        raise HTTPException(status_code=404)
+
+
+@app.get("/admin/codes", response_class=HTMLResponse)
+async def admin_codes(request: Request, code: str = ""):
+    _require_admin(code)
+    return templates.TemplateResponse(
+        "admin_codes.html",
+        {
+            "request": request,
+            "access_code": code,
+            "passes": scan_keys.pass_list(),
+            "pass_stats": scan_keys.pass_stats(),
+            "key_stats": scan_keys.stats(),
+        },
+    )
+
+
+@app.post("/api/admin/pass/revoke")
+async def api_pass_revoke(payload: PassActionRequest):
+    _require_admin(payload.code)
+    pass_id = scan_keys.revoke_pass(payload.ident)
+    if not pass_id:
+        raise HTTPException(status_code=400, detail="Unbekannter Dauer-Code")
+    return {"id": pass_id, "revoked": True, "stats": scan_keys.pass_stats()}
+
+
+@app.post("/api/admin/pass/restore")
+async def api_pass_restore(payload: PassActionRequest):
+    _require_admin(payload.code)
+    pass_id = scan_keys.restore_pass(payload.ident)
+    if not pass_id:
+        raise HTTPException(status_code=400, detail="Unbekannter Dauer-Code")
+    return {"id": pass_id, "revoked": False, "stats": scan_keys.pass_stats()}
+
+
+@app.post("/api/admin/pass/label")
+async def api_pass_label(payload: PassActionRequest):
+    _require_admin(payload.code)
+    pass_id = scan_keys.label_pass(payload.ident, payload.label or "")
+    if not pass_id:
+        raise HTTPException(status_code=400, detail="Unbekannter Dauer-Code")
+    return {"id": pass_id, "label": payload.label or ""}
 
 
 @app.get("/healthz")
