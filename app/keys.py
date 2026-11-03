@@ -163,17 +163,24 @@ class PassStatus:
     REVOKED = "revoked"
 
 
-def _load_pass_hashes() -> dict[str, str]:
-    """hash -> id. Die ID ist die Kurzkennung, unter der gesperrt wird."""
+def _load_pass_hashes() -> tuple[dict[str, str], dict[str, str]]:
+    """(hash -> id, id -> Name). Die ID ist die Kurzkennung, unter der
+    gesperrt wird. Der Name ist optional und nur eine Beschriftung: wird ein
+    Code für eine bestimmte Person angelegt, steht sie so von Anfang an in
+    der Übersicht, auch bevor jemand von Hand eine Notiz setzt."""
     try:
         with open(PASS_HASHES_FILE) as f:
             data = json.load(f)
-        return {p["hash"]: p["id"] for p in data.get("passes", []) if p.get("hash") and p.get("id")}
+        eintraege = [p for p in data.get("passes", []) if p.get("hash") and p.get("id")]
+        return (
+            {p["hash"]: p["id"] for p in eintraege},
+            {p["id"]: p["name"] for p in eintraege if p.get("name")},
+        )
     except (OSError, json.JSONDecodeError, TypeError):
-        return {}
+        return {}, {}
 
 
-_PASS_IDS = _load_pass_hashes()
+_PASS_IDS, _PASS_NAMES = _load_pass_hashes()
 _PASS_BY_ID = {pid: h for h, pid in _PASS_IDS.items()}
 
 
@@ -285,7 +292,7 @@ def pass_list() -> list[dict]:
         e = _pass_state.get(pass_id, {})
         out.append({
             "id": pass_id,
-            "label": e.get("label", ""),
+            "label": e.get("label") or _PASS_NAMES.get(pass_id, ""),
             "revoked": bool(e.get("revoked")),
             "revoked_at": e.get("revoked_at"),
             "uses": int(e.get("uses", 0)),
