@@ -1,6 +1,6 @@
 {
  "algo": "sha256",
- "count": 31,
+ "count": 32,
  "note": "Dauer-Codes: unbegrenzt nutzbar, bis sie gesperrt werden. Klartext liegt nur beim Betreiber.",
  "passes": [
   {
@@ -127,6 +127,10 @@
    "id": "LEO",
    "hash": "116b5dcb72178c480b37fff9c4aea2d6d59c908c012a10076ff40ce9894ee5c1",
    "name": "Leo"
+  },
+  {
+   "id": "P31",
+   "hash": "e7995e4c074b80f7b325389e4ae74dd1998abcccbc1ba2c80fe5306e1c756dfa"
   }
  ]
 }
