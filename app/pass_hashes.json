@@ -1,6 +1,6 @@
 {
  "algo": "sha256",
- "count": 34,
+ "count": 35,
  "note": "Dauer-Codes: unbegrenzt nutzbar, bis sie gesperrt werden. Klartext liegt nur beim Betreiber.",
  "passes": [
   {
@@ -141,6 +141,11 @@
    "id": "DAN",
    "hash": "fbc57634c6aa296a84327cf276b8b6d04d509816d7022c1eee9dea782bc6403f",
    "name": "Daniel"
+  },
+  {
+   "id": "NEV",
+   "hash": "13be3863ce99c67d1979445957b95acae1be6b5ec23fe9d762e6d7661af6746e",
+   "name": "Nevio"
   }
  ]
 }
