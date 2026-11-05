@@ -32,7 +32,7 @@ function severityLabel(sev) {
 }
 
 function statusColor(status) {
-  return { green: "green", yellow: "yellow", red: "red" }[status] || "yellow";
+  return { green: "green", yellow: "yellow", red: "red", unknown: "grey" }[status] || "yellow";
 }
 
 function riskClass(score) {
@@ -149,9 +149,9 @@ function renderReport(result) {
       <div class="category-card">
         <div class="category-card-header">
           <div class="category-title"><span class="dot ${color}"></span> ${cat.label}</div>
-          <div class="category-score">${cat.score}/100</div>
+          <div class="category-score">${cat.judged === false ? tUI("report.not_judged") : cat.score + "/100"}</div>
         </div>
-        <div class="bar-track"><div class="bar-fill ${color}" style="width:${cat.score}%"></div></div>
+        <div class="bar-track"><div class="bar-fill ${color}" style="width:${cat.judged === false ? 0 : cat.score}%"></div></div>
         <ul class="findings-list">${findingsHtml}</ul>
       </div>`;
     })

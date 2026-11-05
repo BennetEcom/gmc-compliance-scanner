@@ -302,6 +302,7 @@ h1 {
 .dot.green { background: var(--green); }
 .dot.yellow { background: var(--yellow); }
 .dot.red { background: var(--red); }
+.dot.grey { background: var(--muted, #98a2b3); }
 
 /* Section headings (generic, centered) */
 .section-head { text-align: center; padding: 64px 24px 8px; position: relative; }

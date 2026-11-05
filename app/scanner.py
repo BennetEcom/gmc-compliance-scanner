@@ -331,11 +331,19 @@ class CategoryResult:
     key: str
     label: str
     score: int  # 0-100
-    status: str = field(init=False)  # green/yellow/red
+    status: str = field(init=False)  # green/yellow/red/unknown
     findings: list = field(default_factory=list)
+    # Konnte die Kategorie ueberhaupt beurteilt werden? Liess sich die Seite
+    # nicht laden, ist die Antwort nicht "alles in Ordnung", sondern "wissen
+    # wir nicht". Solche Kategorien flossen frueher mit 100 in die
+    # Gesamtnote ein und haben sie nach oben gezogen - ein Shop konnte so
+    # fast fehlerfrei aussehen, obwohl gar nichts geprueft worden war.
+    judged: bool = True
 
     def __post_init__(self):
-        if self.score >= 80:
+        if not self.judged:
+            self.status = "unknown"
+        elif self.score >= 80:
             self.status = "green"
         elif self.score >= 50:
             self.status = "yellow"
@@ -348,6 +356,7 @@ class CategoryResult:
             "label": self.label,
             "score": self.score,
             "status": self.status,
+            "judged": self.judged,
             "findings": [f.__dict__ for f in self.findings],
         }
 
@@ -519,7 +528,7 @@ async def check_broken_links(client: httpx.AsyncClient, base_url: str, homepage_
 
     if not homepage_html:
         findings.append(Finding("info", t("links.unavailable_title", lang), t("links.unavailable_detail", lang)))
-        return CategoryResult("broken_links", t("cat.broken_links", lang), 100, findings)
+        return CategoryResult("broken_links", t("cat.broken_links", lang), 100, findings, judged=False)
 
     links = list(site_urls.get("all", []))
     total_discovered = site_urls.get("total_discovered", len(links))
@@ -684,7 +693,7 @@ async def check_contact_legal(client: httpx.AsyncClient, base_url: str, homepage
     combined_html = "\n".join(pages_html.values())
     if not combined_html.strip():
         findings.append(Finding("info", t("contact.unavailable_title", lang), t("contact.unavailable_detail", lang)))
-        return CategoryResult("contact_legal", t("cat.contact_legal", lang), 100, findings)
+        return CategoryResult("contact_legal", t("cat.contact_legal", lang), 100, findings, judged=False)
 
     # 1) Geschäftliche E-Mail statt privatem Anbieter
     emails_by_page = {url: set(EMAIL_RE.findall(html)) for url, html in pages_html.items()}
@@ -1079,7 +1088,7 @@ async def check_page_speed(client: httpx.AsyncClient, base_url: str, lang: str =
 
     if isinstance(resp, Exception) or resp.status_code >= 400:
         findings.append(Finding("info", t("speed.unavailable_title", lang), t("speed.unavailable_detail", lang)))
-        return CategoryResult("page_speed", label, 100, findings)
+        return CategoryResult("page_speed", label, 100, findings, judged=False)
 
     html_kb = len(resp.content) / 1024
     score = 100
@@ -1157,7 +1166,7 @@ async def check_reviews(homepage_html: Optional[str], product_pages: list[tuple[
     all_html = (homepage_html or "") + "".join(html for _, html in product_pages)
     if not all_html.strip():
         findings.append(Finding("info", t("reviews.unavailable_title", lang), t("reviews.unavailable_detail", lang)))
-        return CategoryResult("reviews", t("cat.reviews", lang), 100, findings)
+        return CategoryResult("reviews", t("cat.reviews", lang), 100, findings, judged=False)
 
     lower_html = all_html.lower()
     detected_platforms = sorted({name for sig, name in KNOWN_REVIEW_PLATFORMS.items() if sig in lower_html})
@@ -1212,7 +1221,7 @@ async def check_urgency_patterns(product_pages: list[tuple[str, str]], products_
 
     if not product_pages:
         findings.append(Finding("info", t("urgency.unavailable_title", lang), t("urgency.unavailable_detail", lang)))
-        return CategoryResult("urgency", t("cat.urgency", lang), 100, findings)
+        return CategoryResult("urgency", t("cat.urgency", lang), 100, findings, judged=False)
 
     text_hits: set[str] = set()
     app_hits: set[str] = set()
@@ -1341,7 +1350,7 @@ def check_storefront_info(homepage_html: Optional[str], lang: str = DEFAULT_LANG
 
     if not homepage_html:
         findings.append(Finding("info", t("front.unavailable_title", lang), t("front.unavailable_detail", lang)))
-        return CategoryResult("storefront_info", t("cat.storefront_info", lang), 100, findings)
+        return CategoryResult("storefront_info", t("cat.storefront_info", lang), 100, findings, judged=False)
 
     soup = BeautifulSoup(homepage_html, "html.parser")
     for weg in soup(["script", "style", "noscript"]):
@@ -1504,7 +1513,15 @@ async def run_scan(raw_url: str, lang: str = DEFAULT_LANG) -> dict:
         "urgency": 0.08,
         "page_speed": 0.08,
     }
-    overall = round(sum(c.score * weights[c.key] for c in categories))
+    # Nicht beurteilbare Kategorien zaehlen nicht mit. Die uebrigen Gewichte
+    # werden auf 1,0 hochgerechnet, damit eine ungelesene Seite die Note
+    # weder hebt noch senkt - sie wird im Bericht als ungeprueft ausgewiesen.
+    beurteilt = [c for c in categories if c.judged]
+    gewicht_summe = sum(weights[c.key] for c in beurteilt)
+    if gewicht_summe > 0:
+        overall = round(sum(c.score * weights[c.key] for c in beurteilt) / gewicht_summe)
+    else:
+        overall = 0
 
     if overall >= 80:
         risk_label = t("risk.low", lang)

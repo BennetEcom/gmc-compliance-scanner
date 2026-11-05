@@ -128,8 +128,8 @@ _T: dict[str, dict[str, str]] = {
     },
     "front.missing.hours_title": {"de": "Service-Zeiten fehlen im Footer", "en": "Customer service hours missing from footer"},
     "front.missing.hours_detail": {
-        "de": "Schreib dazu, wann der Kundenservice erreichbar ist, z. B. „Operating Hours (Monday to Friday): 09:00 – 18:00“. Eine Telefonnummer ohne Zeitfenster wirkt unverbindlich.",
-        "en": "State when customer service is reachable, e.g. \"Operating Hours (Monday to Friday): 09:00 – 18:00\". A phone number without hours looks non-committal.",
+        "de": "Schreib dazu, wann der Kundenservice erreichbar ist. Welche Zeiten das sind, ist egal – es muss nur eine konkrete Zeit dastehen, etwa „Mo–Fr 10:00–16:00“ oder „Monday to Saturday: 08:00 to 20:00“. Geprüft wird, ob überhaupt ein Zeitfenster genannt ist, nicht wie lang es ist.",
+        "en": "State when customer service is reachable. The hours themselves don't matter – there just has to be a concrete time, e.g. \"Mon–Fri 10:00–16:00\" or \"Monday to Saturday: 08:00 to 20:00\". What is checked is that any time window is named at all, not how long it is.",
     },
 
     "front.nav.about_title": {"de": "„About us“ fehlt in der Hauptnavigation", "en": "\"About us\" missing from the main navigation"},

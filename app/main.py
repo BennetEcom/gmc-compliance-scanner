@@ -51,7 +51,11 @@ def _asset_version(*paths: str) -> str:
     return str(int(newest)) or "1"
 
 
-ASSET_VERSION = _asset_version("app/static/css/style.css", "app/static/js/app.js")
+# i18n.js gehoert mit in die Liste: aendert sich nur eine Uebersetzung,
+# bleibt die Version sonst stehen und Browser liefern die alte Datei aus.
+ASSET_VERSION = _asset_version(
+    "app/static/css/style.css", "app/static/js/app.js", "app/static/js/i18n.js"
+)
 
 # Zähler + "schon gescannt"-Liste + Scan-Guthaben pro Domain (kein Tracking
 # von Besucher:innen, keine IPs/Cookies, kein Login). Ein gekauftes Paket gilt
