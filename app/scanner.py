@@ -202,6 +202,87 @@ GUESSED_PATHS = [
     "/pages/faq", "/pages/returns",
 ]
 
+# --- Pflichtangaben im Footer und in der Hauptnavigation ---
+#
+# Google beanstandet unter "Misrepresentation" regelmaessig Shops, bei denen
+# Anschrift, Lageradresse oder die Erreichbarkeit des Supports nirgends auf
+# der Storefront stehen - auch dann, wenn ein Impressum existiert. Geprueft
+# wird deshalb genau da, wo ein Reviewer zuerst hinsieht: im Footer der
+# Startseite und in der Hauptnavigation.
+#
+# Die Soll-Struktur stammt aus einem Footer, der die Pruefung bestanden hat:
+# Store-Name, Firmenname, Handelsregisternummer, Firmenanschrift,
+# Lageradresse, E-Mail, Telefon und die Servicezeiten - jedes mit eigener
+# Beschriftung, damit es ohne Raten auffindbar ist.
+
+# Strasse + Hausnummer, deutsch und englisch geschrieben.
+STREET_PATTERNS = [
+    r"[A-Za-zÄÖÜäöüß.\-]{3,}(?:stra(?:ss|ß)e|straat|str\.|weg|allee|platz|gasse|ring|damm|ufer|chaussee)\s*\d+",
+    r"\d{1,5}\s+[A-Za-z0-9.\-]+(?:\s+[A-Za-z0-9.\-]+){0,2}\s+(?:street|st\.?|road|rd\.?|avenue|ave\.?|lane|ln\.?|drive|dr\.?|boulevard|blvd\.?|way|court|ct\.?|place|pl\.?|suite|ste\.?|unit)\b",
+]
+
+# Postleitzahl + Ort. Deckt Europa, die Niederlande, UK und die USA ab.
+POSTCODE_PATTERNS = [
+    r"\b\d{4,6}\s+[A-ZÄÖÜ][A-Za-zÄÖÜäöüß.\-]{2,}",              # 10115 Berlin
+    r"\b\d{4}\s?[A-Z]{2}\b",                                    # 2691 BJ
+    r"\b[A-Z][A-Za-z.\-]+,\s*[A-Z]{2}\s*\d{5}(?:-\d{4})?\b",     # Austin, TX 78701
+    r"\b[A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2}\b",                # B37 7XN
+]
+
+OPENING_HOURS_PATTERNS = [
+    # Monday to Friday / Mo - Fr / Montag bis Freitag
+    r"\b(?:mo|mon|montag|monday)\b[^.\n]{0,24}\b(?:fr|fri|freitag|friday|sa|sat|samstag|saturday|so|sun|sonntag|sunday)\b",
+    # 09:00 - 18:00 Uhr / 09:00 AM to 18:00 PM / 9am - 5pm
+    r"\d{1,2}[:.]\d{2}\s*(?:am|pm|uhr)?\s*(?:-|–|—|bis|to|till|until)\s*\d{1,2}[:.]\d{2}",
+    r"\d{1,2}\s*(?:am|pm)\s*(?:-|–|—|to|till|until)\s*\d{1,2}\s*(?:am|pm)",
+]
+
+# Die Pflichtfelder im Footer. Je Eintrag: Beschriftungen, nach denen gesucht
+# wird, wie der Wert geprueft wird, Gewicht und Dringlichkeit.
+#   pruefung: "adresse"  -> Strasse+Hausnummer oder PLZ+Ort im Umfeld
+#             "zeiten"   -> Wochentage oder Uhrzeitfenster im Umfeld
+#             "text"     -> irgendein nicht-leerer Wert hinter der Beschriftung
+#             "email" / "telefon" -> eigene Muster, Beschriftung optional
+FOOTER_FIELDS = [
+    ("store_name",       ["store name", "shop name", "storename", "shopname", "name des shops"],                                  "text",    10, "medium"),
+    ("business_name",    ["business name", "company name", "firmenname", "firma", "betreiber", "legal name", "unternehmen"],      "text",    15, "high"),
+    ("registration",     ["kvk nr", "kvk-nr", "kvk", "hrb", "handelsregister", "company number", "company no", "registration number", "reg. nr",
+                          "ust-id", "ust-idnr", "umsatzsteuer", "vat number", "vat no", "steuernummer", "siret", "p. iva"],       "text",    10, "medium"),
+    ("business_address", ["business address", "company address", "firmenadresse", "firmenanschrift", "geschäftsadresse",
+                          "geschaeftsadresse", "anschrift", "registered address", "legal address"],                               "adresse", 20, "high"),
+    ("warehouse",        ["warehouse address", "warehouse", "lageradresse", "lager", "versandlager", "rücksendeadresse",
+                          "ruecksendeadresse", "retourenadresse", "return address", "returns address", "fulfillment",
+                          "fulfilment", "distribution center", "distribution centre", "logistikzentrum"],                         "adresse", 20, "high"),
+    ("email",            ["e-mail address", "email address", "e-mail", "email", "mail"],                                          "email",   10, "high"),
+    ("phone",            ["phone number", "telephone", "telefon", "telefonnummer", "phone", "tel."],                              "telefon", 10, "medium"),
+    ("hours",            ["customer service available hours", "operating hours", "öffnungszeiten", "oeffnungszeiten",
+                          "servicezeiten", "geschäftszeiten", "geschaeftszeiten", "erreichbarkeit", "opening hours",
+                          "business hours", "office hours", "support hours", "customer service hours", "working hours"],          "zeiten",  15, "medium"),
+]
+
+# Alle Beschriftungen zusammen - daran wird ein gefundener Wert abgeschnitten,
+# damit er nicht ins naechste Feld hineinlaeuft. Laengste zuerst, sonst
+# schneidet "lager" ab, wo "lageradresse" gemeint war.
+_ALLE_FOOTER_LABELS = sorted(
+    {label for _, labels, *_ in FOOTER_FIELDS for label in labels},
+    key=len, reverse=True,
+)
+
+# Navigationspunkte, die ein Reviewer im Kopfbereich erwartet. Je Eintrag:
+# Begriffe im Linktext, Fragmente im Link-Ziel, Abzug.
+HEADER_NAV_ITEMS = [
+    ("about", ["about us", "about", "über uns", "ueber uns", "unsere geschichte",
+               "our story", "wer wir sind", "who we are"],
+              ["/about", "about-us", "ueber-uns", "über-uns", "our-story"], 15),
+    ("tracking", ["track your order", "track order", "order tracking", "track my order",
+                  "sendungsverfolgung", "paketverfolgung", "bestellung verfolgen",
+                  "where is my order", "track & trace", "tracking"],
+                 ["track", "tracking", "sendungsverfolgung", "order-status", "orderstatus"], 15),
+    ("faq", ["faq", "frequently asked questions", "häufige fragen", "haeufige fragen",
+             "häufig gestellte fragen", "fragen und antworten", "help center", "hilfe"],
+            ["faq", "frequently-asked", "haeufige-fragen", "häufige-fragen", "questions"], 15),
+]
+
 USED_CONDITION_KEYWORDS = [
     "refurbished", "second-hand", "secondhand", "pre-owned", "preowned",
     "gebraucht", "generalüberholt", "occasion",
@@ -1184,6 +1265,199 @@ async def check_urgency_patterns(product_pages: list[tuple[str, str]], products_
 # ---------------------------------------------------------------------------
 # Orchestrierung
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 10) Pflichtangaben im Footer und in der Hauptnavigation
+# ---------------------------------------------------------------------------
+_WS_RE = re.compile(r"\s+")
+
+
+def _bereich_text(soup, tagnamen: tuple, klassen_teile: tuple) -> tuple[str, bool]:
+    """Sammelt den sichtbaren Text eines Seitenbereichs (Footer bzw. Header).
+
+    Gibt (Text, gefunden) zurueck. Wurde der Bereich nicht erkannt, ist
+    gefunden False - dann urteilen wir nicht ins Blaue, sondern sagen das."""
+    knoten = list(soup.find_all(tagnamen))
+    for tag in soup.find_all(attrs={"class": True}):
+        klassen = " ".join(tag.get("class") or []).lower()
+        if any(teil in klassen for teil in klassen_teile):
+            knoten.append(tag)
+    for tag in soup.find_all(attrs={"id": True}):
+        if any(teil in (tag.get("id") or "").lower() for teil in klassen_teile):
+            knoten.append(tag)
+
+    if not knoten:
+        return "", False
+
+    teile = []
+    for tag in knoten:
+        for weg in tag(["script", "style", "noscript"]):
+            weg.decompose()
+        teile.append(tag.get_text(" ", strip=True))
+    return _WS_RE.sub(" ", " ".join(teile)), True
+
+
+def _wert_hinter(text_low: str, text: str, beschriftungen: list[str], fenster: int = 220) -> Optional[tuple[str, str]]:
+    """Sucht eine Beschriftung und gibt (gefundene Beschriftung, Wert dahinter)
+    zurueck.
+
+    Der Wert endet an der naechsten bekannten Beschriftung. Ohne diesen
+    Schnitt zieht sich ein Fund quer durch den halben Footer und die
+    Meldung zitiert dann Text, der zum naechsten Feld gehoert."""
+    for label in beschriftungen:
+        pos = text_low.find(label)
+        if pos == -1:
+            continue
+        ab = pos + len(label)
+        wert = text[ab:ab + fenster]
+        wert_low = wert.lower()
+        ende = len(wert)
+        for andere in _ALLE_FOOTER_LABELS:
+            treffer = wert_low.find(andere)
+            # > 0, damit die eigene Beschriftung nicht sich selbst abschneidet
+            if 0 < treffer < ende:
+                ende = treffer
+        return label, wert[:ende].strip(" :–—-,;\u00a0")
+    return None
+
+
+def _ist_adresse(text: str) -> bool:
+    return (
+        any(re.search(pat, text, re.I) for pat in STREET_PATTERNS)
+        or any(re.search(pat, text) for pat in POSTCODE_PATTERNS)
+    )
+
+
+def _ist_zeitangabe(text: str) -> bool:
+    return any(re.search(pat, text.lower()) for pat in OPENING_HOURS_PATTERNS)
+
+
+def check_storefront_info(homepage_html: Optional[str], lang: str = DEFAULT_LANG) -> CategoryResult:
+    """Prueft, ob Footer und Hauptnavigation die Angaben tragen, die ein
+    Google-Reviewer dort sucht. Bewusst nur auf der Startseite: es geht
+    darum, dass die Angaben auf der Storefront SICHTBAR sind, nicht darum,
+    ob sie irgendwo auf einer Unterseite existieren."""
+    findings: list[Finding] = []
+    score = 100
+
+    if not homepage_html:
+        findings.append(Finding("info", t("front.unavailable_title", lang), t("front.unavailable_detail", lang)))
+        return CategoryResult("storefront_info", t("cat.storefront_info", lang), 100, findings)
+
+    soup = BeautifulSoup(homepage_html, "html.parser")
+    for weg in soup(["script", "style", "noscript"]):
+        weg.decompose()
+
+    footer_text, footer_da = _bereich_text(soup, ("footer",), ("footer", "site-footer"))
+    if not footer_da:
+        # Kein abgegrenzter Footer: lieber den ganzen Seitentext pruefen und
+        # dazusagen, dass der Bereich nicht eindeutig war.
+        footer_text = _WS_RE.sub(" ", soup.get_text(" ", strip=True))
+        findings.append(Finding("low", t("front.no_footer_title", lang), t("front.no_footer_detail", lang)))
+        score -= 5
+
+    footer_low = footer_text.lower()
+
+    fehlend: list[str] = []
+    gefunden: list[str] = []
+
+    for key, labels, pruefung, abzug, schwere in FOOTER_FIELDS:
+        feld_name = t(f"front.field.{key}", lang)
+        treffer = _wert_hinter(footer_low, footer_text, labels)
+
+        wert_ok = False
+        belegt = ""
+
+        if pruefung == "email":
+            m = EMAIL_RE.search(footer_text)
+            wert_ok, belegt = bool(m), (m.group(0) if m else "")
+        elif pruefung == "telefon":
+            m = PHONE_RE.search(footer_text)
+            wert_ok, belegt = bool(m), (m.group(0).strip() if m else "")
+        elif treffer:
+            label, wert = treffer
+            if pruefung == "adresse":
+                wert_ok = _ist_adresse(wert)
+            elif pruefung == "zeiten":
+                wert_ok = _ist_zeitangabe(wert) or _ist_zeitangabe(footer_text)
+            else:  # "text"
+                wert_ok = len(wert.strip()) >= 2
+            belegt = _WS_RE.sub(" ", wert.strip())[:110]
+
+            # Bei den Zeiten steht der eigentliche Wert haeufig hinter einer
+            # zweiten Beschriftung ("... available hours" / "Operating Hours:
+            # Mo-Fr 9-18"). Dann ist das Fenster leer, obwohl die Angabe da
+            # ist - also das Zeitfenster selbst zitieren.
+            if pruefung == "zeiten" and wert_ok and not belegt:
+                for muster in OPENING_HOURS_PATTERNS:
+                    m = re.search(muster, footer_text, re.I)
+                    if m:
+                        von = max(0, m.start() - 40)
+                        # auf Wortgrenze ruecken, damit kein Wort angeschnitten wird
+                        luecke = footer_text.find(" ", von)
+                        if 0 <= luecke < m.start():
+                            von = luecke + 1
+                        belegt = _WS_RE.sub(" ", footer_text[von:m.end() + 20].strip())[:110]
+                        break
+
+        if wert_ok:
+            gefunden.append(f"• {feld_name}: {belegt}" if belegt else f"• {feld_name}")
+        else:
+            # Beschriftung da, Wert aber unbrauchbar -> das ist der haeufigere
+            # Fall und verdient eine andere Ansage als "fehlt komplett".
+            if treffer and pruefung in ("adresse", "zeiten"):
+                fehlend.append(f"• {feld_name} – {t('front.label_without_value', lang)}")
+            else:
+                fehlend.append(f"• {feld_name}")
+            score -= abzug
+            findings.append(Finding(
+                schwere,
+                t(f"front.missing.{key}_title", lang),
+                t(f"front.missing.{key}_detail", lang),
+            ))
+
+    if gefunden:
+        findings.insert(0, Finding(
+            "info", t("front.found_title", lang, count=len(gefunden), total=len(FOOTER_FIELDS)),
+            "\n".join(gefunden),
+        ))
+    if fehlend:
+        findings.insert(0, Finding(
+            "high" if len(fehlend) >= 3 else "medium",
+            t("front.summary_title", lang, count=len(fehlend), total=len(FOOTER_FIELDS)),
+            t("front.summary_detail", lang, listing="\n".join(fehlend)),
+        ))
+
+    # --- Hauptnavigation ---
+    header_tags = soup.find_all(["header", "nav"])
+    header_links = []
+    for tag in header_tags:
+        header_links.extend(tag.find_all("a", href=True))
+    for tag in soup.find_all(attrs={"class": True}):
+        klassen = " ".join(tag.get("class") or []).lower()
+        if any(teil in klassen for teil in ("header", "site-nav", "main-nav", "navigation", "menu")):
+            header_links.extend(tag.find_all("a", href=True))
+
+    if not header_links:
+        findings.append(Finding("low", t("front.no_header_title", lang), t("front.no_header_detail", lang)))
+        score -= 5
+    else:
+        paare = [((a.get_text(" ", strip=True) or "").lower(), (a.get("href") or "").lower())
+                 for a in header_links]
+        for key, begriffe, ziele, abzug in HEADER_NAV_ITEMS:
+            da = any(
+                any(b in text for b in begriffe) or any(z in href for z in ziele)
+                for text, href in paare
+            )
+            if not da:
+                findings.append(Finding(
+                    "medium", t(f"front.nav.{key}_title", lang), t(f"front.nav.{key}_detail", lang),
+                ))
+                score -= abzug
+
+    score = max(0, min(100, score))
+    return CategoryResult("storefront_info", t("cat.storefront_info", lang), score, findings)
+
+
 async def run_scan(raw_url: str, lang: str = DEFAULT_LANG) -> dict:
     base_url = normalize_url(raw_url)
 
@@ -1211,18 +1485,24 @@ async def run_scan(raw_url: str, lang: str = DEFAULT_LANG) -> dict:
         reviews_res = await check_reviews(homepage_html, product_pages, lang)
         urgency_res = await check_urgency_patterns(product_pages, products_sample, lang)
 
-    categories = [trust_res, links_res, policy_res, contact_res, feed_res, images_res, reviews_res, urgency_res, speed_res]
+    front_res = check_storefront_info(homepage_html, lang)
 
+    categories = [trust_res, links_res, policy_res, contact_res, front_res, feed_res, images_res, reviews_res, urgency_res, speed_res]
+
+    # Die Pflichtangaben im Footer wiegen so schwer wie der Produkt-Feed:
+    # ein Shop ohne Anschrift und Erreichbarkeit faellt bei Google auf,
+    # egal wie sauber der Rest ist.
     weights = {
-        "trust": 0.10,
-        "broken_links": 0.12,
-        "policy_pages": 0.15,
+        "trust": 0.09,
+        "broken_links": 0.11,
+        "policy_pages": 0.13,
         "contact_legal": 0.12,
-        "product_feed": 0.15,
-        "images": 0.08,
-        "reviews": 0.09,
-        "urgency": 0.09,
-        "page_speed": 0.10,
+        "storefront_info": 0.10,
+        "product_feed": 0.14,
+        "images": 0.07,
+        "reviews": 0.08,
+        "urgency": 0.08,
+        "page_speed": 0.08,
     }
     overall = round(sum(c.score * weights[c.key] for c in categories))
 

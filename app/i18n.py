@@ -41,11 +41,112 @@ _T: dict[str, dict[str, str]] = {
     "cat.reviews": {"de": "Bewertungen & Social Proof", "en": "Reviews & Social Proof"},
     "cat.urgency": {"de": "Künstliche Dringlichkeit", "en": "Artificial Urgency"},
     "cat.page_speed": {"de": "Page Speed", "en": "Page Speed"},
+    "cat.storefront_info": {"de": "Pflichtangaben in Footer & Navigation", "en": "Required Footer & Navigation Details"},
 
     # --- Risiko-Label ---
     "risk.low": {"de": "Niedriges Sperrrisiko", "en": "Low suspension risk"},
     "risk.medium": {"de": "Mittleres Sperrrisiko", "en": "Medium suspension risk"},
     "risk.high": {"de": "Hohes Sperrrisiko", "en": "High suspension risk"},
+
+
+    # --- Pflichtangaben in Footer & Navigation ---
+    "front.unavailable_title": {"de": "Startseite nicht lesbar", "en": "Homepage could not be read"},
+    "front.unavailable_detail": {
+        "de": "Die Startseite ließ sich nicht laden, deshalb konnten Footer und Navigation nicht geprüft werden.",
+        "en": "The homepage could not be loaded, so the footer and navigation could not be checked.",
+    },
+    "front.no_footer_title": {"de": "Kein abgegrenzter Footer gefunden", "en": "No distinct footer found"},
+    "front.no_footer_detail": {
+        "de": "Die Seite hat keinen erkennbaren Footer-Bereich. Geprüft wurde deshalb der gesamte Seitentext – ein Reviewer sucht die Angaben aber unten auf der Seite.",
+        "en": "The page has no recognisable footer area. The whole page text was checked instead – but a reviewer looks for these details at the bottom of the page.",
+    },
+    "front.no_header_title": {"de": "Keine Hauptnavigation gefunden", "en": "No main navigation found"},
+    "front.no_header_detail": {
+        "de": "Im Kopfbereich wurden keine Navigationslinks gefunden. Wird das Menü erst per JavaScript nachgeladen, sieht ein Reviewer es unter Umständen ebenfalls nicht.",
+        "en": "No navigation links were found in the header. If the menu is loaded by JavaScript only, a reviewer may not see it either.",
+    },
+    "front.label_without_value": {
+        "de": "Beschriftung vorhanden, aber kein verwertbarer Wert dahinter",
+        "en": "label present, but no usable value after it",
+    },
+    "front.found_title": {
+        "de": "{count} von {total} Pflichtangaben im Footer gefunden",
+        "en": "{count} of {total} required footer details found",
+    },
+    "front.summary_title": {
+        "de": "{count} von {total} Pflichtangaben fehlen im Footer",
+        "en": "{count} of {total} required details missing from the footer",
+    },
+    "front.summary_detail": {
+        "de": "Diese Angaben gehören sichtbar in den Footer der Startseite:\n{listing}",
+        "en": "These details belong visibly in the homepage footer:\n{listing}",
+    },
+
+    "front.field.store_name": {"de": "Store-Name", "en": "Store name"},
+    "front.field.business_name": {"de": "Firmenname", "en": "Business name"},
+    "front.field.registration": {"de": "Handelsregister-/USt-Nummer", "en": "Company registration / VAT number"},
+    "front.field.business_address": {"de": "Firmenanschrift", "en": "Business address"},
+    "front.field.warehouse": {"de": "Lager-/Rücksendeadresse", "en": "Warehouse / return address"},
+    "front.field.email": {"de": "E-Mail-Adresse", "en": "Email address"},
+    "front.field.phone": {"de": "Telefonnummer", "en": "Phone number"},
+    "front.field.hours": {"de": "Service-Zeiten", "en": "Customer service hours"},
+
+    "front.missing.store_name_title": {"de": "Store-Name fehlt im Footer", "en": "Store name missing from footer"},
+    "front.missing.store_name_detail": {
+        "de": "Schreib den Namen des Shops ausdrücklich in den Footer, z. B. „Store name: Muster Shop“. Er soll sich nicht nur aus dem Logo erschließen.",
+        "en": "State the shop's name explicitly in the footer, e.g. \"Store name: Example Shop\". It should not have to be inferred from the logo.",
+    },
+    "front.missing.business_name_title": {"de": "Firmenname fehlt im Footer", "en": "Business name missing from footer"},
+    "front.missing.business_name_detail": {
+        "de": "Der rechtliche Name des Betreibers gehört in den Footer, z. B. „Business name: Muster BV“. Google prüft, ob Shop und Betreiber benannt sind – der Shopname allein genügt nicht.",
+        "en": "The operator's legal name belongs in the footer, e.g. \"Business name: Example BV\". Google checks that both shop and operator are named – the shop name alone is not enough.",
+    },
+    "front.missing.registration_title": {"de": "Registernummer fehlt im Footer", "en": "Registration number missing from footer"},
+    "front.missing.registration_detail": {
+        "de": "Ergänze die Handelsregister- oder Umsatzsteuer-Nummer, z. B. „Kvk nr: 82796491“ oder „HRB 12345“. Sie macht den Betreiber überprüfbar.",
+        "en": "Add the company registration or VAT number, e.g. \"Kvk nr: 82796491\" or \"Company No. 12345\". It makes the operator verifiable.",
+    },
+    "front.missing.business_address_title": {"de": "Firmenanschrift fehlt im Footer", "en": "Business address missing from footer"},
+    "front.missing.business_address_detail": {
+        "de": "Die vollständige Anschrift des Unternehmens gehört sichtbar in den Footer – Straße, Hausnummer, Postleitzahl, Ort und Land, z. B. „Business Address: Langestraat 84, 2691 BJ, 's-Gravenzande NL“. Ein bloßer Link zum Impressum reicht Google nicht.",
+        "en": "The company's full address belongs visibly in the footer – street, number, postcode, city and country, e.g. \"Business Address: Langestraat 84, 2691 BJ, 's-Gravenzande NL\". A mere link to a legal notice is not enough for Google.",
+    },
+    "front.missing.warehouse_title": {"de": "Lager-/Rücksendeadresse fehlt im Footer", "en": "Warehouse / return address missing from footer"},
+    "front.missing.warehouse_detail": {
+        "de": "Nenne die Adresse, von der versandt und an die zurückgesendet wird, ausdrücklich beschriftet, z. B. „Warehouse address: 13 Farndon Ave, Birmingham B37 7XN, United Kingdom“. Fehlt sie, wertet Google den Shop schnell als Dropshipping ohne greifbaren Betreiber.",
+        "en": "State the address goods are shipped from and returned to, explicitly labelled, e.g. \"Warehouse address: 13 Farndon Ave, Birmingham B37 7XN, United Kingdom\". Without it, Google quickly reads the shop as dropshipping with no tangible operator.",
+    },
+    "front.missing.email_title": {"de": "E-Mail-Adresse fehlt im Footer", "en": "Email address missing from footer"},
+    "front.missing.email_detail": {
+        "de": "Eine Kontakt-E-Mail gehört direkt in den Footer, nicht nur auf die Kontaktseite oder hinter ein Formular.",
+        "en": "A contact email belongs directly in the footer, not only on the contact page or behind a form.",
+    },
+    "front.missing.phone_title": {"de": "Telefonnummer fehlt im Footer", "en": "Phone number missing from footer"},
+    "front.missing.phone_detail": {
+        "de": "Eine erreichbare Telefonnummer im Footer ist eines der Merkmale, an denen Google einen echten Händler von einer Durchlauf-Seite unterscheidet.",
+        "en": "A reachable phone number in the footer is one of the signals Google uses to tell a real merchant from a throwaway site.",
+    },
+    "front.missing.hours_title": {"de": "Service-Zeiten fehlen im Footer", "en": "Customer service hours missing from footer"},
+    "front.missing.hours_detail": {
+        "de": "Schreib dazu, wann der Kundenservice erreichbar ist, z. B. „Operating Hours (Monday to Friday): 09:00 – 18:00“. Eine Telefonnummer ohne Zeitfenster wirkt unverbindlich.",
+        "en": "State when customer service is reachable, e.g. \"Operating Hours (Monday to Friday): 09:00 – 18:00\". A phone number without hours looks non-committal.",
+    },
+
+    "front.nav.about_title": {"de": "„About us“ fehlt in der Hauptnavigation", "en": "\"About us\" missing from the main navigation"},
+    "front.nav.about_detail": {
+        "de": "Eine Über-uns-Seite muss oben im Menü verlinkt sein. Sie ist für Reviewer der erste Anlaufpunkt, um zu prüfen, wer hinter dem Shop steht.",
+        "en": "An About page must be linked in the top menu. It is the first place a reviewer looks to see who is behind the shop.",
+    },
+    "front.nav.tracking_title": {"de": "„Track your order“ fehlt in der Hauptnavigation", "en": "\"Track your order\" missing from the main navigation"},
+    "front.nav.tracking_detail": {
+        "de": "Eine Sendungsverfolgung gehört oben ins Menü. Fehlt sie, zählt Google das zu den Anzeichen, dass nach dem Kauf niemand erreichbar ist.",
+        "en": "Order tracking belongs in the top menu. Without it, Google counts this among the signs that nobody is reachable after the purchase.",
+    },
+    "front.nav.faq_title": {"de": "„FAQ“ fehlt in der Hauptnavigation", "en": "\"FAQ\" missing from the main navigation"},
+    "front.nav.faq_detail": {
+        "de": "Eine FAQ-Seite gehört oben ins Menü und sollte Versand, Rückgabe und Zahlung beantworten.",
+        "en": "An FAQ page belongs in the top menu and should answer shipping, returns and payment questions.",
+    },
 
     # --- Notices ---
     "notice.free_mode": {"de": "Aktuell komplett kostenlos.", "en": "Currently completely free."},
