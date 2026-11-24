@@ -324,6 +324,12 @@ class Finding:
     severity: str  # "critical" | "high" | "medium" | "low" | "info"
     title: str
     detail: str
+    # Belegt dieser Befund nur, dass eine Anforderung erfuellt ist? Solche
+    # Befunde verlassen den Server nicht. Wer einmal scannt, soll nicht die
+    # komplette Pruefliste mitsamt Musterloesung abschreiben koennen - er
+    # erfaehrt, WAS bei ihm falsch ist, nicht, was alles geprueft wurde und
+    # wie die richtige Antwort aussieht.
+    evidence: bool = False
 
 
 @dataclass
@@ -351,14 +357,28 @@ class CategoryResult:
             self.status = "red"
 
     def to_dict(self):
+        # Was in Ordnung ist, wird gezaehlt, nicht benannt: der Bericht nennt
+        # die Beanstandungen und sagt, wie viele Punkte sauber waren. So
+        # laesst sich aus einem Scan nicht die ganze Pruefliste ableiten.
+        sichtbar = [f for f in self.findings if not f.evidence]
         return {
             "key": self.key,
             "label": self.label,
             "score": self.score,
             "status": self.status,
             "judged": self.judged,
-            "findings": [f.__dict__ for f in self.findings],
+            "passed": len(self.findings) - len(sichtbar),
+            "findings": [
+                {"severity": f.severity, "title": f.title, "detail": f.detail}
+                for f in sichtbar
+            ],
         }
+
+
+def Bestaetigung(title: str, detail: str) -> Finding:
+    """Ein Befund, der nur belegt, dass eine Anforderung erfuellt ist.
+    Er wird gezaehlt, aber nicht ausgeliefert."""
+    return Finding("info", title, detail, evidence=True)
 
 
 async def fetch(client: httpx.AsyncClient, url: str, method: str = "GET", timeout: Optional[httpx.Timeout] = None, **kw):
@@ -394,7 +414,7 @@ async def check_trust_domain(client: httpx.AsyncClient, base_url: str, lang: str
         score -= 60
     else:
         if str(resp.url).startswith("https://"):
-            findings.append(Finding("info", t("trust.https_active_title", lang), t("trust.https_active_detail", lang)))
+            findings.append(Bestaetigung(t("trust.https_active_title", lang), t("trust.https_active_detail", lang)))
         else:
             findings.append(Finding("critical", t("trust.no_https_title", lang), t("trust.no_https_detail", lang)))
             score -= 30
@@ -414,7 +434,7 @@ async def check_trust_domain(client: httpx.AsyncClient, base_url: str, lang: str
             findings.append(Finding("medium", t("trust.ssl_expiring_title", lang), t("trust.ssl_expiring_detail", lang, days=days_left)))
             score -= 10
         else:
-            findings.append(Finding("info", t("trust.ssl_valid_title", lang), t("trust.ssl_valid_detail", lang, days=days_left)))
+            findings.append(Bestaetigung(t("trust.ssl_valid_title", lang), t("trust.ssl_valid_detail", lang, days=days_left)))
     except Exception as exc:  # noqa: BLE001
         findings.append(Finding("info", t("trust.ssl_unchecked_title", lang), t("trust.ssl_unchecked_detail", lang, error=exc)))
 
@@ -440,7 +460,7 @@ async def check_trust_domain(client: httpx.AsyncClient, base_url: str, lang: str
                                  t("trust.domain_young_detail", lang, days=domain_age_days)))
         score -= 20
     else:
-        findings.append(Finding("info", t("trust.domain_age_ok_title", lang), t("trust.domain_age_ok_detail", lang, days=domain_age_days)))
+        findings.append(Bestaetigung(t("trust.domain_age_ok_title", lang), t("trust.domain_age_ok_detail", lang, days=domain_age_days)))
 
     score = max(0, min(100, score))
     return CategoryResult("trust", t("cat.trust", lang), score, findings)
@@ -592,9 +612,9 @@ async def check_broken_links(client: httpx.AsyncClient, base_url: str, homepage_
                 preview,
             ))
         elif not other_errors:
-            findings.append(Finding("info", t("links.none_broken_title", lang), t("links.none_broken_detail", lang, total=len(links), coverage=coverage_note)))
+            findings.append(Bestaetigung(t("links.none_broken_title", lang), t("links.none_broken_detail", lang, total=len(links), coverage=coverage_note)))
         else:
-            findings.append(Finding("info", t("links.no_real_404_title", lang), t("links.no_real_404_detail", lang, total=len(links), coverage=coverage_note)))
+            findings.append(Bestaetigung(t("links.no_real_404_title", lang), t("links.no_real_404_detail", lang, total=len(links), coverage=coverage_note)))
 
         if other_errors:
             shown = other_errors[:15]
@@ -664,7 +684,7 @@ async def check_policy_pages(client: httpx.AsyncClient, base_url: str, homepage_
         total_weight += w
         label = t(meta["label_key"], lang)
         if key in found_keys:
-            findings.append(Finding("info", t("policy.found_title", lang, label=label), t("policy.found_detail", lang)))
+            findings.append(Bestaetigung(t("policy.found_title", lang, label=label), t("policy.found_detail", lang)))
         else:
             lost_weight += w
             findings.append(Finding(meta["severity"], t("policy.missing_title", lang, label=label),
@@ -708,7 +728,7 @@ async def check_contact_legal(client: httpx.AsyncClient, base_url: str, homepage
             ))
             score -= 15
         else:
-            findings.append(Finding("info", t("contact.business_email_title", lang), f"{', '.join(sorted(all_emails))[:200]}"))
+            findings.append(Bestaetigung(t("contact.business_email_title", lang), f"{', '.join(sorted(all_emails))[:200]}"))
     else:
         findings.append(Finding("high", t("contact.no_email_title", lang), t("contact.no_email_detail", lang)))
         score -= 20
@@ -718,7 +738,7 @@ async def check_contact_legal(client: httpx.AsyncClient, base_url: str, homepage
         findings.append(Finding("medium", t("contact.no_phone_title", lang), t("contact.no_phone_detail", lang)))
         score -= 10
     else:
-        findings.append(Finding("info", t("contact.phone_found_title", lang), t("contact.phone_found_detail", lang)))
+        findings.append(Bestaetigung(t("contact.phone_found_title", lang), t("contact.phone_found_detail", lang)))
 
     # 3) NAP-Konsistenz: identische E-Mail über alle geprüften Seiten hinweg
     non_empty_pages = {url: emails for url, emails in emails_by_page.items() if emails}
@@ -1000,7 +1020,7 @@ async def check_product_feed(client: httpx.AsyncClient, base_url: str, homepage_
         score -= min(15, used_wording * 5)
 
     if not missing_gtin and not missing_brand and not missing_price and not missing_desc and not duplicate_skus and not inverted_compare_at and not used_wording:
-        findings.append(Finding("info", t("feed.sample_ok_title", lang), t("feed.sample_ok_detail", lang, n=n)))
+        findings.append(Bestaetigung(t("feed.sample_ok_title", lang), t("feed.sample_ok_detail", lang, n=n)))
 
     collection_findings = await check_nav_collections(client, base_url, homepage_html, lang)
     if collection_findings:
@@ -1062,7 +1082,7 @@ async def check_images(client: httpx.AsyncClient, base_url: str, products_sample
                                  t("images.too_small_detail", lang, rec_px=RECOMMENDED_IMAGE_EDGE_PX)))
         score -= min(25, too_small * 5)
     if not broken and not too_small:
-        findings.append(Finding("info", t("images.ok_title", lang), t("images.ok_detail", lang, checked=checked)))
+        findings.append(Bestaetigung(t("images.ok_title", lang), t("images.ok_detail", lang, checked=checked)))
 
     findings.append(Finding("info", t("images.note_title", lang), t("images.note_detail", lang)))
 
@@ -1094,7 +1114,7 @@ async def check_page_speed(client: httpx.AsyncClient, base_url: str, lang: str =
     score = 100
 
     if load_time_s <= GOOD_LOAD_TIME_S:
-        findings.append(Finding("info", t("speed.load_time_title", lang, seconds=f"{load_time_s:.2f}"),
+        findings.append(Bestaetigung(t("speed.load_time_title", lang, seconds=f"{load_time_s:.2f}"),
                                  t("speed.load_fast_detail", lang)))
     elif load_time_s <= OK_LOAD_TIME_S:
         findings.append(Finding(
@@ -1110,7 +1130,7 @@ async def check_page_speed(client: httpx.AsyncClient, base_url: str, lang: str =
         score -= 35
 
     if html_kb <= GOOD_HTML_SIZE_KB:
-        findings.append(Finding("info", t("speed.html_size_title", lang, kb=f"{html_kb:.0f}"), t("speed.html_compact_detail", lang)))
+        findings.append(Bestaetigung(t("speed.html_size_title", lang, kb=f"{html_kb:.0f}"), t("speed.html_compact_detail", lang)))
     elif html_kb <= OK_HTML_SIZE_KB:
         findings.append(Finding(
             "low", t("speed.html_size_title", lang, kb=f"{html_kb:.0f}"),
@@ -1235,7 +1255,7 @@ async def check_urgency_patterns(product_pages: list[tuple[str, str]], products_
                 app_hits.add(sig)
 
     if not text_hits and not app_hits:
-        findings.append(Finding("info", t("urgency.none_found_title", lang), t("urgency.none_found_detail", lang)))
+        findings.append(Bestaetigung(t("urgency.none_found_title", lang), t("urgency.none_found_detail", lang)))
         return CategoryResult("urgency", t("cat.urgency", lang), 100, findings)
 
     if app_hits:
@@ -1410,6 +1430,7 @@ def check_storefront_info(homepage_html: Optional[str], lang: str = DEFAULT_LANG
 
         if wert_ok:
             gefunden.append(f"• {feld_name}: {belegt}" if belegt else f"• {feld_name}")
+            findings.append(Bestaetigung(feld_name, belegt))
         else:
             # Beschriftung da, Wert aber unbrauchbar -> das ist der haeufigere
             # Fall und verdient eine andere Ansage als "fehlt komplett".
@@ -1424,11 +1445,6 @@ def check_storefront_info(homepage_html: Optional[str], lang: str = DEFAULT_LANG
                 t(f"front.missing.{key}_detail", lang),
             ))
 
-    if gefunden:
-        findings.insert(0, Finding(
-            "info", t("front.found_title", lang, count=len(gefunden), total=len(FOOTER_FIELDS)),
-            "\n".join(gefunden),
-        ))
     if fehlend:
         findings.insert(0, Finding(
             "high" if len(fehlend) >= 3 else "medium",
@@ -1457,7 +1473,9 @@ def check_storefront_info(homepage_html: Optional[str], lang: str = DEFAULT_LANG
                 any(b in text for b in begriffe) or any(z in href for z in ziele)
                 for text, href in paare
             )
-            if not da:
+            if da:
+                findings.append(Bestaetigung(t(f"front.nav.{key}_title", lang), ""))
+            else:
                 findings.append(Finding(
                     "medium", t(f"front.nav.{key}_title", lang), t(f"front.nav.{key}_detail", lang),
                 ))

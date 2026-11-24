@@ -145,6 +145,12 @@ function renderReport(result) {
         </li>`
         )
         .join("");
+      // Was in Ordnung war, kommt gar nicht erst vom Server. Hier steht nur
+      // die Anzahl - sonst koennte man die Pruefliste abschreiben.
+      const passedHtml =
+        cat.passed > 0
+          ? `<li class="finding finding-passed"><span class="sev-badge sev-ok">${tUI("sev.ok")}</span><span class="finding-body">${tUI("report.passed_note").replace("{count}", cat.passed)}</span></li>`
+          : "";
       return `
       <div class="category-card">
         <div class="category-card-header">
@@ -152,10 +158,16 @@ function renderReport(result) {
           <div class="category-score">${cat.judged === false ? tUI("report.not_judged") : cat.score + "/100"}</div>
         </div>
         <div class="bar-track"><div class="bar-fill ${color}" style="width:${cat.judged === false ? 0 : cat.score}%"></div></div>
-        <ul class="findings-list">${findingsHtml}</ul>
+        <ul class="findings-list">${findingsHtml}${passedHtml}</ul>
       </div>`;
     })
     .join("");
+
+  const checkedPoints = result.categories.reduce(
+    (summe, cat) => summe + (cat.passed || 0) + cat.findings.length,
+    0
+  );
+  const checkedAreas = result.categories.length;
 
   const reportRingColor = scoreColor(result.overall_score);
   const reportRingOffset = RING_CIRCUMFERENCE * (1 - result.overall_score / 100);
@@ -199,6 +211,9 @@ function renderReport(result) {
       <h2>${tUI("report.title")}</h2>
       <div class="url">${result.url}</div>
       <div class="report-date">${formatScanDate(result.scanned_at)}</div>
+      <div class="report-scope">${tUI("report.scope")
+        .replace("{points}", checkedPoints)
+        .replace("{areas}", checkedAreas)}</div>
       <button type="button" id="report-pdf" class="report-pdf-btn">${tUI("report.save_pdf")}</button>
       <div class="report-ring">
         <svg viewBox="0 0 120 120">

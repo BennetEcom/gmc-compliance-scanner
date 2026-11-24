@@ -303,6 +303,9 @@ h1 {
 .dot.yellow { background: var(--yellow); }
 .dot.red { background: var(--red); }
 .dot.grey { background: var(--muted, #98a2b3); }
+.finding-passed { opacity: .72; }
+.sev-badge.sev-ok { background: #e7f6ec; color: #067647; }
+.report-scope { font-size: 13px; color: var(--muted, #667085); margin-top: 2px; }
 
 /* Section headings (generic, centered) */
 .section-head { text-align: center; padding: 64px 24px 8px; position: relative; }

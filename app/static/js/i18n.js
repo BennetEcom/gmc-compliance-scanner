@@ -22,6 +22,15 @@ const I18N = {
   "hero.key_hint": { de: "Ohne Scan-Key kein Scan. Ein Key gilt für genau einen Scan einer Domain.", en: "No scan without a scan key. One key is valid for exactly one scan of one domain." },
   "report.save_pdf": { de: "Als PDF speichern", en: "Save as PDF" },
   "report.not_judged": { de: "nicht prüfbar", en: "not assessable" },
+  "report.passed_note": {
+    de: "{count} weitere Prüfpunkte in diesem Bereich waren ohne Beanstandung.",
+    en: "{count} further checks in this area passed without issues.",
+  },
+  "report.scope": {
+    de: "{points} Prüfpunkte in {areas} Bereichen geprüft",
+    en: "{points} checks across {areas} areas",
+  },
+  "sev.ok": { de: "OK", en: "OK" },
   "err.key_required": { de: "Für einen Scan brauchst du einen Scan-Key. Trag ihn im Feld darunter ein.", en: "Scanning requires a scan key. Enter it in the field below." },
   "err.key_unknown": { de: "Diesen Code kennen wir nicht. Format: GMCA-XXXXX-XXXXX-XXXXX oder GMCP-XXXXX-XXXXX-XXXXX.", en: "We don't recognise this code. Format: GMCA-XXXXX-XXXXX-XXXXX or GMCP-XXXXX-XXXXX-XXXXX." },
   "hero.scan_btn": { de: "Scan starten", en: "Start scan" },
